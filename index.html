@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Azimut — animations cartographiques IGN</title>
+<link rel="icon" type="image/svg+xml" href="logo/azimut-icone.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --console:#141d19;
+  --panel:#1d2a24;
+  --panel-2:#243329;
+  --line:#33443a;
+  --paper:#ece6d6;
+  --paper-dim:#9fae9f;
+  --hydro:#4fb3cf;
+  --hydro-deep:#2b7d95;
+  --ochre:#e2a83c;
+  --alert:#d9634a;
+  --radius:3px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--console);
+  color:var(--paper);
+  font-family:"Barlow Semi Condensed",system-ui,sans-serif;
+  font-size:15px;
+  line-height:1.45;
+  overflow:hidden;
+}
+h1,h2,h3,.num{font-family:"Barlow Condensed","Barlow Semi Condensed",sans-serif}
+
+/* ---------- structure ---------- */
+#app{display:grid;grid-template-columns:352px 1fr;height:100%}
+#console{
+  background:var(--panel);
+  border-right:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0;
+}
+#stage{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  background:
+    repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 44px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.022) 0 1px,transparent 1px 44px),
+    #0e1512;
+  padding:22px;min-width:0;
+}
+#out{
+  max-width:100%;max-height:100%;
+  box-shadow:0 24px 60px rgba(0,0,0,.55);
+  background:#0e1512;
+  border-radius:2px;
+}
+#gl{display:none}
+
+/* ---------- console header ---------- */
+.head{padding:20px 22px 16px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:13px}
+.brand-mark{width:60px;height:60px;flex:none}
+.head h1{
+  margin:0;font-size:36px;font-weight:600;letter-spacing:.055em;
+  line-height:1;color:var(--paper);text-transform:uppercase;
+}
+.head p{margin:12px 0 0;color:var(--paper-dim);font-size:13.5px;max-width:32ch}
+
+/* ---------- scrolling body ---------- */
+.body{overflow-y:auto;flex:1;padding:4px 22px 20px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.group{padding:18px 0;border-bottom:1px solid var(--line)}
+.group:last-child{border-bottom:none}
+.group > h2{
+  margin:0 0 12px;font-size:16px;font-weight:600;color:var(--ochre);letter-spacing:.01em;
+}
+label{display:block;font-size:13.5px;color:var(--paper-dim);margin-bottom:5px}
+.field{margin-bottom:13px}
+.field:last-child{margin-bottom:0}
+input[type=text],input[type=number],select{
+  width:100%;padding:8px 10px;background:var(--panel-2);color:var(--paper);
+  border:1px solid var(--line);border-radius:var(--radius);
+  font-family:inherit;font-size:15px;outline:none;
+}
+input[type=number]{font-variant-numeric:tabular-nums}
+input:focus,select:focus{border-color:var(--hydro);box-shadow:0 0 0 2px rgba(79,179,207,.18)}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--paper-dim) 50%),linear-gradient(135deg,var(--paper-dim) 50%,transparent 50%);background-position:calc(100% - 16px) 52%,calc(100% - 11px) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:30px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hint{font-size:12.5px;color:#7d8f80;margin-top:5px}
+
+/* search */
+.searchbar{display:flex;gap:8px}
+.searchbar input{flex:1}
+button{
+  font-family:"Barlow Semi Condensed",sans-serif;font-size:15px;
+  background:var(--panel-2);color:var(--paper);
+  border:1px solid var(--line);border-radius:var(--radius);
+  padding:8px 13px;cursor:pointer;
+}
+button:hover:not(:disabled){border-color:var(--hydro);color:#fff}
+button:disabled{opacity:.42;cursor:default}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--hydro);outline-offset:2px}
+
+#results{list-style:none;margin:9px 0 0;padding:0;max-height:196px;overflow-y:auto}
+#results li{padding:7px 10px;border:1px solid transparent;border-radius:var(--radius);cursor:pointer;font-size:14px}
+#results li:hover,#results li:focus{background:var(--panel-2);border-color:var(--line)}
+#results li i{display:block;font-style:normal;color:var(--paper-dim);font-size:12.5px;font-variant-numeric:tabular-nums}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chips button{padding:4px 9px;font-size:13px;color:var(--paper-dim);background:transparent}
+
+#target{
+  margin-top:12px;padding:10px 12px;background:var(--panel-2);
+  border-left:2px solid var(--hydro);border-radius:0 var(--radius) var(--radius) 0;
+}
+#target b{font-weight:600;font-size:15px;display:block}
+#target span{color:var(--paper-dim);font-size:13px;font-variant-numeric:tabular-nums}
+
+/* checkboxes */
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:7px 14px}
+.check{display:flex;align-items:center;gap:7px;font-size:14px;color:var(--paper);cursor:pointer;margin:0}
+.check input{accent-color:var(--hydro);width:15px;height:15px;margin:0}
+
+/* footer / actions */
+.actions{padding:16px 22px;border-top:1px solid var(--line);background:var(--panel)}
+.actions .go{
+  width:100%;background:var(--hydro);color:#08130f;border-color:var(--hydro);
+  font-size:17px;font-weight:600;padding:11px;letter-spacing:.01em;
+}
+.actions .go:hover:not(:disabled){background:#63c6e0;color:#08130f}
+.actions .rec{width:100%;margin-top:8px;border-color:var(--alert);color:#f0b0a3}
+.actions .rec:hover:not(:disabled){background:rgba(217,99,74,.16);color:#fff;border-color:var(--alert)}
+.meter{height:3px;background:var(--line);border-radius:2px;margin-top:12px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--hydro);transition:width .12s linear}
+.status{font-size:13px;color:var(--paper-dim);margin-top:8px;min-height:19px;font-variant-numeric:tabular-nums}
+.status a{color:var(--hydro)}
+.status.err{color:#f0a08f}
+
+/* stage badges */
+#recdot{
+  position:absolute;top:34px;left:34px;display:none;align-items:center;gap:8px;
+  font-size:14px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.8);
+}
+#recdot.on{display:flex}
+#recdot em{width:11px;height:11px;border-radius:50%;background:var(--alert);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){#recdot em{animation:none}}
+
+#empty{position:absolute;color:#5c6f62;font-size:16px;text-align:center;max-width:34ch;pointer-events:none}
+
+/* chargement, au centre de la zone image */
+#loader{
+  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  background:rgba(9,17,14,.74);backdrop-filter:blur(3px);
+}
+#loader.on{display:flex}
+.lcard{width:min(400px,78%);text-align:center;padding:30px 34px}
+.lnum{
+  font-family:"Barlow Condensed",sans-serif;font-size:74px;font-weight:600;
+  line-height:.92;color:var(--hydro);font-variant-numeric:tabular-nums;
+}
+.lnum small{font-size:30px;font-weight:500;color:var(--paper-dim);margin-left:2px}
+.ltxt{margin-top:10px;font-size:17px;color:var(--paper)}
+.lbar{height:5px;background:#2b3a31;border-radius:3px;margin-top:18px;overflow:hidden}
+.lbar i{display:block;height:100%;width:0;background:var(--hydro);transition:width .1s linear}
+.lsub{margin-top:9px;font-size:14px;color:var(--paper-dim);font-variant-numeric:tabular-nums;min-height:20px}
+
+.filerow{display:flex;align-items:center;gap:9px}
+.filerow input[type=file]{font-size:13px;color:var(--paper-dim);width:100%;font-family:inherit}
+.filerow input[type=file]::file-selector-button{
+  font-family:inherit;font-size:14px;background:var(--panel-2);color:var(--paper);
+  border:1px solid var(--line);border-radius:var(--radius);padding:6px 11px;margin-right:9px;cursor:pointer;
+}
+.filerow input[type=file]::file-selector-button:hover{border-color:var(--hydro)}
+
+@media (max-width:900px){
+  #app{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow:auto}
+  body{overflow:auto}
+  #console{border-right:none;border-bottom:1px solid var(--line)}
+  .body{overflow:visible}
+  #stage{min-height:56vh;padding:14px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <aside id="console">
+    <div class="head">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 180 180" role="img" aria-label="Azimut">
+          <g transform="translate(90,90) scale(1.02)">
+            <circle r="78" fill="none" stroke="#4fb3cf" stroke-width="3"/>
+            <g stroke="#4fb3cf" stroke-width="2.5" stroke-linecap="round" opacity="0.75">
+              <line x1="55.2" y1="-55.2" x2="48.1" y2="-48.1"/>
+              <line x1="78" y1="0" x2="68" y2="0"/>
+              <line x1="55.2" y1="55.2" x2="48.1" y2="48.1"/>
+              <line x1="0" y1="78" x2="0" y2="68"/>
+              <line x1="-55.2" y1="55.2" x2="-48.1" y2="48.1"/>
+              <line x1="-78" y1="0" x2="-68" y2="0"/>
+              <line x1="-55.2" y1="-55.2" x2="-48.1" y2="-48.1"/>
+            </g>
+            <polygon points="0,-74 -7.5,-58 7.5,-58" fill="#e2a83c"/>
+            <g stroke="#4fb3cf" stroke-width="7.5" stroke-linecap="round" fill="none">
+              <line x1="0" y1="-38" x2="-32" y2="66"/>
+              <line x1="0" y1="-38" x2="32" y2="66"/>
+            </g>
+            <path d="M -21.2 30.8 A 72 72 0 0 1 21.2 30.8" fill="none" stroke="#e2a83c" stroke-width="7.5" stroke-linecap="round"/>
+            <circle cy="-38" r="5" fill="#4fb3cf"/>
+          </g>
+        </svg>
+        <h1>Azimut</h1>
+      </div>
+      <p>Fabrique un travelling vertical vers n'importe quel point de France, sur les fonds de l'IGN.</p>
+    </div>
+
+    <div class="body">
+
+      <section class="group">
+        <h2>Point visé</h2>
+        <div class="field">
+          <label for="q">Adresse, lieu-dit, ou latitude et longitude</label>
+          <div class="searchbar">
+            <input type="text" id="q" placeholder="12 rue de Rivoli, Paris — ou 48.8584, 2.2945" autocomplete="off">
+            <button id="find">Chercher</button>
+          </div>
+          <ul id="results"></ul>
+          <div class="chips">
+            <button data-lat="48.85837" data-lon="2.29448" data-label="Tour Eiffel, Paris">Tour Eiffel</button>
+            <button data-lat="48.63601" data-lon="-1.51146" data-label="Mont-Saint-Michel">Mont-Saint-Michel</button>
+            <button data-lat="43.94756" data-lon="4.53534" data-label="Pont du Gard">Pont du Gard</button>
+            <button data-lat="44.58832" data-lon="-1.21354" data-label="Dune du Pilat">Dune du Pilat</button>
+            <button data-lat="45.83262" data-lon="6.86500" data-label="Sommet du Mont Blanc">Mont Blanc</button>
+          </div>
+          <div id="target" hidden><b id="tlabel"></b><span id="tcoord"></span></div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Mouvement</h2>
+        <div class="field row">
+          <div>
+            <label for="dur">Durée du zoom (s)</label>
+            <input type="number" id="dur" value="11" min="2" max="60" step="0.5">
+          </div>
+          <div>
+            <label for="ease">Rythme</label>
+            <select id="ease">
+              <option value="cinema" selected>Départ et arrivée doux</option>
+              <option value="douce">Très progressif</option>
+              <option value="plongee">Accélération continue</option>
+              <option value="pose">Arrivée en douceur</option>
+              <option value="lineaire">Vitesse constante</option>
+            </select>
+          </div>
+        </div>
+        <div class="field row">
+          <div>
+            <label for="w0">Cadre de départ (km)</label>
+            <input type="number" id="w0" value="1400" min="50" max="4000" step="50">
+          </div>
+          <div>
+            <label for="w1">Cadre d'arrivée (m)</label>
+            <input type="number" id="w1" value="300" min="60" max="20000" step="10">
+          </div>
+        </div>
+        <div class="field row">
+          <div>
+            <label for="hold0">Pause au départ (s)</label>
+            <input type="number" id="hold0" value="1" min="0" max="10" step="0.5">
+          </div>
+          <div>
+            <label for="hold1">Pause à l'arrivée (s)</label>
+            <input type="number" id="hold1" value="2" min="0" max="10" step="0.5">
+          </div>
+        </div>
+        <div class="field">
+          <label for="rot">Rotation pendant la descente (°) — se termine plein nord</label>
+          <input type="number" id="rot" value="6" min="0" max="25" step="1">
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Image</h2>
+        <div class="field row">
+          <div>
+            <label for="mode">Fond</label>
+            <select id="mode">
+              <option value="ortho" selected>Photo aérienne seule</option>
+              <option value="mix">Plan IGN puis photo aérienne</option>
+              <option value="plan">Plan IGN seul</option>
+            </select>
+          </div>
+          <div>
+            <label for="res">Format</label>
+            <select id="res">
+              <option value="1280x720" selected>1280 × 720</option>
+              <option value="1920x1080">1920 × 1080</option>
+              <option value="1080x1350">1080 × 1350 (portrait)</option>
+              <option value="1080x1920">1080 × 1920 (vertical)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="qual">Finesse des tuiles — plus fin veut dire plus long à charger</label>
+          <select id="qual">
+            <option value="384">Rapide</option>
+            <option value="288" selected>Équilibrée</option>
+            <option value="224">Fine</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="title">Titre affiché à l'arrivée</label>
+          <input type="text" id="title" placeholder="repris du lieu recherché">
+        </div>
+        <div class="field">
+          <label for="logo">Logo à incruster — sinon un bloc IGN est dessiné</label>
+          <div class="filerow"><input type="file" id="logo" accept="image/png,image/jpeg,image/svg+xml,image/webp"></div>
+        </div>
+        <div class="field checks">
+          <label class="check"><input type="checkbox" id="cMark" checked> Repère</label>
+          <label class="check"><input type="checkbox" id="cTitle" checked> Titre</label>
+          <label class="check"><input type="checkbox" id="cScale" checked> Échelle</label>
+          <label class="check"><input type="checkbox" id="cVig" checked> Vignettage</label>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="actions">
+      <button class="go" id="play" disabled>Lancer l'animation</button>
+      <button class="rec" id="rec" disabled>Enregistrer la vidéo</button>
+      <div class="meter"><i id="bar"></i></div>
+      <div class="status" id="status">Choisissez d'abord un point à viser.</div>
+    </div>
+  </aside>
+
+  <main id="stage">
+    <canvas id="out" width="1280" height="720"></canvas>
+    <canvas id="gl"></canvas>
+    <div id="recdot"><em></em>Enregistrement</div>
+    <div id="empty">La prévisualisation apparaîtra ici une fois le point choisi.</div>
+    <div id="loader">
+      <div class="lcard">
+        <div class="lnum"><span id="lpct">0</span><small>%</small></div>
+        <div class="ltxt" id="ltxt">Chargement des tuiles IGN</div>
+        <div class="lbar"><i id="lfill"></i></div>
+        <div class="lsub" id="lsub"></div>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<script>
+"use strict";
+
+/* =======================================================================
+   1. Géométrie Web Mercator
+   ======================================================================= */
+const EARTH_C = 40075016.686;           // circonférence à l'équateur, en mètres
+const D2R = Math.PI / 180;
+
+function lonLatToMerc(lon, lat){
+  const x = (lon + 180) / 360;
+  const s = Math.sin(lat * D2R);
+  const y = 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+  return [x, Math.min(1, Math.max(0, y))];
+}
+// largeur au sol (m) <-> étendue mercator normalisée [0..1]
+const groundToSpan = (m, lat) => m / (EARTH_C * Math.cos(lat * D2R));
+const spanToGround = (s, lat) => s * EARTH_C * Math.cos(lat * D2R);
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+function smoothstep(a, b, x){
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+/* =======================================================================
+   2. Couches WMTS de la Géoplateforme IGN (accès libre, sans clé)
+   ======================================================================= */
+const LAYERS = {
+  plan : { id:"GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2", fmt:"image/png",  ext:"png", maxZ:19 },
+  ortho: { id:"ORTHOIMAGERY.ORTHOPHOTOS",          fmt:"image/jpeg", ext:"jpg", maxZ:20 }
+};
+const SWITCH_Z = 12;   // niveau où le plan cède la place à la photo, en mode "mix"
+
+function layerAt(z){
+  if (S.mode === "plan")  return "plan";
+  if (S.mode === "ortho") return "ortho";
+  return z < SWITCH_Z ? "plan" : "ortho";
+}
+function maxZoom(){
+  if (S.mode === "plan") return LAYERS.plan.maxZ;
+  return LAYERS.ortho.maxZ;
+}
+function tileURL(key, z, x, y){
+  const L = LAYERS[key];
+  return "https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile"
+       + "&LAYER=" + L.id + "&STYLE=normal&FORMAT=" + encodeURIComponent(L.fmt)
+       + "&TILEMATRIXSET=PM&TILEMATRIX=" + z + "&TILEROW=" + y + "&TILECOL=" + x;
+}
+
+/* =======================================================================
+   3. État de l'application
+   ======================================================================= */
+const S = {
+  lat:null, lon:null, label:"", mx:0, my:0,
+  W:1280, H:720,
+  duration:11, hold0:1, hold1:2, ease:"cinema",
+  w0:1400000, w1:300,
+  rot:6, mode:"ortho", tileTarget:288,
+  s0:0.05, s1:1e-5,
+  effMaxZ:20,
+  ready:false, signature:"", busy:false
+};
+
+const EASINGS = {
+  lineaire: t => t,
+  cinema:   t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2,
+  douce:    t => t*t*t*(t*(t*6 - 15) + 10),
+  plongee:  t => t*t,
+  pose:     t => 1 - Math.pow(1 - t, 3)
+};
+
+/* =======================================================================
+   4. WebGL : rendu des tuiles
+   ======================================================================= */
+const glCanvas = document.getElementById("gl");
+const gl = glCanvas.getContext("webgl", {
+  alpha:false, antialias:false, preserveDrawingBuffer:true, premultipliedAlpha:true
+});
+if (!gl) alert("Votre navigateur ne prend pas en charge WebGL.");
+
+const VS = `
+attribute vec2 a_pos;
+uniform vec4 u_rect;    // x, y, largeur, hauteur en coordonnées écran normalisées
+uniform vec2 u_rot;     // cos, sin
+uniform float u_aspect; // largeur / hauteur
+varying vec2 v_uv;
+void main(){
+  v_uv = vec2(a_pos.x, 1.0 - a_pos.y);
+  vec2 p = u_rect.xy + a_pos * u_rect.zw;
+  vec2 q = vec2(p.x * u_aspect, p.y);
+  q = vec2(q.x * u_rot.x - q.y * u_rot.y, q.x * u_rot.y + q.y * u_rot.x);
+  gl_Position = vec4(q.x / u_aspect, q.y, 0.0, 1.0);
+}`;
+const FS = `
+precision mediump float;
+uniform sampler2D u_tex;
+uniform float u_alpha;
+varying vec2 v_uv;
+void main(){
+  vec4 c = texture2D(u_tex, v_uv);
+  gl_FragColor = c * u_alpha;
+}`;
+
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+
+const U = {
+  rect:   gl.getUniformLocation(prog, "u_rect"),
+  rot:    gl.getUniformLocation(prog, "u_rot"),
+  aspect: gl.getUniformLocation(prog, "u_aspect"),
+  alpha:  gl.getUniformLocation(prog, "u_alpha"),
+  tex:    gl.getUniformLocation(prog, "u_tex")
+};
+const quad = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0,0, 1,0, 0,1, 0,1, 1,0, 1,1]), gl.STATIC_DRAW);
+const aPos = gl.getAttribLocation(prog, "a_pos");
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+gl.uniform1i(U.tex, 0);
+
+/* =======================================================================
+   5. Cache de tuiles
+   ======================================================================= */
+const tiles = new Map();                       // clé -> {tex} | {failed:true}
+const tkey = (k, z, x, y) => k + "/" + z + "/" + x + "/" + y;
+
+function loadTile(k, z, x, y){
+  const key = tkey(k, z, x, y);
+  if (tiles.has(key)) return Promise.resolve();
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      tiles.set(key, { tex });
+      resolve();
+    };
+    img.onerror = () => { tiles.set(key, { failed:true }); resolve(); };
+    img.src = tileURL(k, z, x, y);
+  });
+}
+
+async function loadMany(list, onProgress){
+  let i = 0, done = 0;
+  const worker = async () => {
+    while (i < list.length){
+      const t = list[i++];
+      await loadTile(t.k, t.z, t.x, t.y);
+      onProgress(++done, list.length);
+    }
+  };
+  await Promise.all(Array.from({ length:12 }, worker));
+}
+
+/* =======================================================================
+   6. Choix des niveaux et emprise des tuiles
+   ======================================================================= */
+const FADE_START = 0.45;   // le niveau supérieur n'apparaît qu'au-delà de ce seuil
+
+// niveaux dessinés pour une étendue s donnée : [{z, alpha}]
+function levelsAt(s, maxZ){
+  const zf = Math.log2(S.W / (S.tileTarget * s));
+  let zi = Math.floor(zf);
+  const f = zf - zi;
+  zi = clamp(zi, 0, maxZ);
+  const out = [{ z:zi, alpha:1 }];
+  if (zi < maxZ && f > FADE_START){
+    out.push({ z: zi + 1, alpha: smoothstep(FADE_START, 1, f) });
+  }
+  return out;
+}
+
+// emprise visible en tuiles, boîte englobante après rotation
+function rangeAt(z, s, theta){
+  const n = 1 << z, size = 1 / n;
+  const hw = s / 2, hh = (s * S.H / S.W) / 2;
+  const c = Math.abs(Math.cos(theta)), si = Math.abs(Math.sin(theta));
+  const ehw = hw * c + hh * si, ehh = hw * si + hh * c;
+  return {
+    x0: clamp(Math.floor((S.mx - ehw) / size), 0, n - 1),
+    x1: clamp(Math.floor((S.mx + ehw) / size), 0, n - 1),
+    y0: clamp(Math.floor((S.my - ehh) / size), 0, n - 1),
+    y1: clamp(Math.floor((S.my + ehh) / size), 0, n - 1),
+    size, n
+  };
+}
+
+const spanAt = u => S.s0 * Math.pow(S.s1 / S.s0, u);
+const thetaAt = u => (1 - u) * S.rot * D2R;
+
+// ensemble complet des tuiles nécessaires à l'animation
+function planTiles(){
+  const set = new Map();
+  const steps = Math.max(150, Math.ceil(S.duration * 45));
+  const maxZ = maxZoom();
+  for (let i = 0; i <= steps; i++){
+    const u = EASINGS[S.ease](i / steps);
+    const s = spanAt(u), th = thetaAt(u);
+    for (const lv of levelsAt(s, maxZ)){
+      const k = layerAt(lv.z);
+      const r = rangeAt(lv.z, s, th);
+      for (let x = r.x0; x <= r.x1; x++)
+        for (let y = r.y0; y <= r.y1; y++){
+          const key = tkey(k, lv.z, x, y);
+          if (!set.has(key) && !tiles.has(key)) set.set(key, { k, z:lv.z, x, y });
+        }
+    }
+  }
+  return [...set.values()];
+}
+
+/* =======================================================================
+   7. Rendu d'une image
+   ======================================================================= */
+function drawLevel(z, s, theta, alpha){
+  const k = layerAt(z);
+  const r = rangeAt(z, s, theta);
+  const halfX = s / 2, halfY = (s * S.H / S.W) / 2;
+  gl.uniform1f(U.alpha, alpha);
+  for (let x = r.x0; x <= r.x1; x++){
+    for (let y = r.y0; y <= r.y1; y++){
+      const t = tiles.get(tkey(k, z, x, y));
+      if (!t || t.failed) continue;
+      // conversion en coordonnées écran faite en double précision côté JS
+      const ax = ((x * r.size) - S.mx) / halfX;
+      const bx = (((x + 1) * r.size) - S.mx) / halfX;
+      const ay = -((( y      * r.size) - S.my) / halfY);   // haut
+      const by = -(((y + 1) * r.size) - S.my) / halfY;     // bas
+      gl.uniform4f(U.rect, ax, by, bx - ax, ay - by);
+      gl.bindTexture(gl.TEXTURE_2D, t.tex);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+  }
+}
+
+function renderGL(s, theta){
+  gl.viewport(0, 0, S.W, S.H);
+  gl.clearColor(0.055, 0.086, 0.075, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.uniform2f(U.rot, Math.cos(theta), Math.sin(theta));
+  gl.uniform1f(U.aspect, S.W / S.H);
+  for (const lv of levelsAt(s, S.effMaxZ)) drawLevel(lv.z, s, theta, lv.alpha);
+}
+
+/* =======================================================================
+   8. Habillage 2D (composité puis capturé)
+   ======================================================================= */
+const out = document.getElementById("out");
+const ctx = out.getContext("2d");
+
+function niceRound(max){
+  const p = Math.pow(10, Math.floor(Math.log10(max)));
+  let best = p;
+  for (const m of [1, 2, 5, 10]) if (m * p <= max) best = m * p;
+  return best;
+}
+
+function drawOverlay(s, t, time){
+  const W = S.W, H = S.H, k = H / 720;   // facteur d'échelle typographique
+
+  if (opt.cVig){
+    const g = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.30, W/2, H/2, Math.max(W,H)*0.72);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(0,0,0,0.46)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  const appear = smoothstep(0.68, 0.95, t);
+
+  if (opt.cMark && appear > 0){
+    const cx = W/2, cy = H/2;
+    ctx.save();
+    for (let i = 0; i < 3; i++){
+      const p = ((time * 0.45 + i / 3) % 1);
+      ctx.globalAlpha = appear * (1 - p) * 0.6;
+      ctx.strokeStyle = "#e2a83c";
+      ctx.lineWidth = 2 * k;
+      ctx.beginPath();
+      ctx.arc(cx, cy, (14 + p * 62) * k, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = appear;
+    ctx.strokeStyle = "rgba(0,0,0,.55)";
+    ctx.lineWidth = 4 * k;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 9 * k, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#e2a83c";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5.5 * k, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  if (opt.cTitle && appear > 0){
+    const text = (opt.title || S.label || "").trim();
+    if (text){
+      const pad = 34 * k;
+      const y = H - pad;             // ligne de base basse du cartouche
+      const plateH = 48 * k;
+      const top = y - plateH;
+      let x = pad;
+
+      ctx.save();
+      ctx.globalAlpha = appear;
+      ctx.translate(0, (1 - appear) * 18 * k);
+
+      // marque IGN : fichier fourni par l'utilisateur, sinon bloc typographique
+      ctx.shadowColor = "rgba(0,0,0,.6)";
+      ctx.shadowBlur = 10 * k;
+      if (logo.img && logo.img.naturalHeight){
+        const w = plateH * (logo.img.naturalWidth / logo.img.naturalHeight);
+        ctx.drawImage(logo.img, x, top, w, plateH);
+        x += w;
+      } else {
+        const w = 60 * k;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(x, top, w, plateH);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#0f3f7a";
+        ctx.font = "700 " + (31 * k) + "px 'Barlow Condensed', sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("IGN", x + w / 2, top + plateH / 2 + 1.5 * k);
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+        x += w;
+      }
+      ctx.shadowBlur = 0;
+
+      x += 14 * k;
+      ctx.fillStyle = "#e2a83c";
+      ctx.fillRect(x, top, 3 * k, plateH);
+      x += 3 * k + 14 * k;
+
+      ctx.shadowColor = "rgba(0,0,0,.75)";
+      ctx.shadowBlur = 12 * k;
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = "#fff";
+      ctx.font = "600 " + (34 * k) + "px 'Barlow Condensed', sans-serif";
+      ctx.fillText(text, x, y - 17 * k);
+      ctx.font = "500 " + (16 * k) + "px 'Barlow Semi Condensed', sans-serif";
+      ctx.fillStyle = "rgba(255,255,255,.82)";
+      ctx.fillText(S.lat.toFixed(5) + "  " + S.lon.toFixed(5) + "   Vue aérienne IGN", x, y);
+      ctx.restore();
+    }
+  }
+
+  if (opt.cScale){
+    const mPerPx = spanToGround(s, S.lat) / W;
+    const maxLen = W * 0.16;
+    const meters = niceRound(maxLen * mPerPx);
+    const px = meters / mPerPx;
+    const x = W - 34 * k - px, y = H - 44 * k;
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.shadowColor = "rgba(0,0,0,.8)";
+    ctx.shadowBlur = 6 * k;
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2 * k;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 6 * k); ctx.lineTo(x, y); ctx.lineTo(x + px, y); ctx.lineTo(x + px, y - 6 * k);
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "500 " + (15 * k) + "px 'Barlow Semi Condensed', sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(meters >= 1000 ? (meters / 1000) + " km" : meters + " m", x + px / 2, y - 10 * k);
+    ctx.restore();
+  }
+
+  // mention obligatoire des données
+  ctx.save();
+  ctx.globalAlpha = 0.72;
+  ctx.fillStyle = "#fff";
+  ctx.font = "400 " + (13 * k) + "px 'Barlow Semi Condensed', sans-serif";
+  ctx.textAlign = "right";
+  ctx.shadowColor = "rgba(0,0,0,.8)";
+  ctx.shadowBlur = 5 * k;
+  ctx.fillText("© IGN — Géoplateforme", S.W - 34 * k, S.H - 22 * k);
+  ctx.restore();
+}
+
+let opt = { cMark:true, cTitle:true, cScale:true, cVig:true, title:"" };
+const logo = { img:null };   // logo chargé localement, donc sans incidence sur l'export
+
+function frame(t, time){
+  const u = EASINGS[S.ease](t);
+  const s = spanAt(u), th = thetaAt(u);
+  renderGL(s, th);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, S.W, S.H);
+  ctx.drawImage(glCanvas, 0, 0);
+  drawOverlay(s, t, time);
+}
+
+/* =======================================================================
+   9. Lecture de l'animation
+   ======================================================================= */
+function runAnimation(){
+  return new Promise(resolve => {
+    const total = S.hold0 + S.duration + S.hold1;
+    const t0 = performance.now();
+    function step(now){
+      const time = (now - t0) / 1000;
+      let t;
+      if (time < S.hold0) t = 0;
+      else if (time < S.hold0 + S.duration) t = (time - S.hold0) / S.duration;
+      else t = 1;
+      frame(clamp(t, 0, 1), time);
+      if (time >= total){ resolve(); return; }
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+/* =======================================================================
+   10. Géocodage (Géoplateforme IGN, repli sur la Base Adresse Nationale)
+   ======================================================================= */
+async function geocode(query){
+  const found = [];
+  const push = (label, lon, lat, extra) => {
+    if (!isFinite(lon) || !isFinite(lat)) return;
+    found.push({ label, lon, lat, extra: extra || "" });
+  };
+  const urls = [
+    "https://data.geopf.fr/geocodage/search?index=address&limit=6&q=" + encodeURIComponent(query),
+    "https://data.geopf.fr/geocodage/search?index=poi&limit=6&q=" + encodeURIComponent(query)
+  ];
+  const rs = await Promise.allSettled(urls.map(u => fetch(u).then(r => r.json())));
+  for (const r of rs){
+    if (r.status !== "fulfilled" || !r.value || !r.value.features) continue;
+    for (const f of r.value.features){
+      const c = f.geometry && f.geometry.coordinates;
+      const p = f.properties || {};
+      const name = p.label || (Array.isArray(p.toponym) ? p.toponym[0] : p.toponym) || p.name || query;
+      if (c) push(String(name), c[0], c[1], p.city || p.postcode || "");
+    }
+  }
+  if (!found.length){
+    try{
+      const r = await fetch("https://api-adresse.data.gouv.fr/search/?limit=6&q=" + encodeURIComponent(query));
+      const j = await r.json();
+      for (const f of (j.features || [])) push(f.properties.label, f.geometry.coordinates[0], f.geometry.coordinates[1], f.properties.context || "");
+    }catch(e){ /* silencieux : on remonte simplement zéro résultat */ }
+  }
+  // dédoublonnage grossier
+  const seen = new Set();
+  return found.filter(f => {
+    const key = f.label + f.lat.toFixed(4) + f.lon.toFixed(4);
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  }).slice(0, 8);
+}
+
+function parseCoords(str){
+  const m = str.trim().match(/^(-?\d{1,3}(?:[.,]\d+)?)\s*[,; ]\s*(-?\d{1,3}(?:[.,]\d+)?)$/);
+  if (!m) return null;
+  const a = parseFloat(m[1].replace(",", ".")), b = parseFloat(m[2].replace(",", "."));
+  if (Math.abs(a) <= 90 && Math.abs(b) <= 180) return { lat:a, lon:b };
+  if (Math.abs(b) <= 90 && Math.abs(a) <= 180) return { lat:b, lon:a };
+  return null;
+}
+
+/* =======================================================================
+   11. Interface
+   ======================================================================= */
+const el = id => document.getElementById(id);
+const statusEl = el("status"), barEl = el("bar");
+
+function say(msg, isError){
+  statusEl.innerHTML = msg;
+  statusEl.classList.toggle("err", !!isError);
+}
+function progress(p){ barEl.style.width = (p * 100).toFixed(1) + "%"; }
+
+// panneau de chargement, au centre de la zone image
+const loader = {
+  root: el("loader"), pct: el("lpct"), fill: el("lfill"), txt: el("ltxt"), sub: el("lsub"),
+  show(title, sub){
+    this.txt.textContent = title;
+    this.sub.textContent = sub || "";
+    this.set(0);
+    this.root.classList.add("on");
+  },
+  set(p, sub){
+    const v = clamp(p, 0, 1);
+    this.pct.textContent = Math.round(v * 100);
+    this.fill.style.width = (v * 100).toFixed(1) + "%";
+    if (sub !== undefined) this.sub.textContent = sub;
+  },
+  hide(){ this.root.classList.remove("on"); }
+};
+
+function readSettings(){
+  S.duration = clamp(parseFloat(el("dur").value) || 11, 1, 120);
+  S.hold0 = clamp(parseFloat(el("hold0").value) || 0, 0, 20);
+  S.hold1 = clamp(parseFloat(el("hold1").value) || 0, 0, 20);
+  S.ease  = el("ease").value;
+  S.w0 = clamp(parseFloat(el("w0").value) || 1400, 10, 6000) * 1000;
+  S.w1 = clamp(parseFloat(el("w1").value) || 300, 20, 200000);
+  S.rot = clamp(parseFloat(el("rot").value) || 0, 0, 40);
+  S.mode = el("mode").value;
+  S.tileTarget = parseInt(el("qual").value, 10);
+  const [w, h] = el("res").value.split("x").map(Number);
+  S.W = w; S.H = h;
+  opt = {
+    cMark: el("cMark").checked, cTitle: el("cTitle").checked,
+    cScale: el("cScale").checked, cVig: el("cVig").checked,
+    title: el("title").value
+  };
+  if (S.lat !== null){
+    S.s0 = clamp(groundToSpan(S.w0, S.lat), 1e-9, 1);
+    S.s1 = clamp(groundToSpan(S.w1, S.lat), 1e-9, S.s0);
+  }
+  out.width = glCanvas.width = S.W;
+  out.height = glCanvas.height = S.H;
+  const sig = [S.lat, S.lon, S.W, S.H, S.duration, S.ease, S.w0, S.w1, S.rot, S.mode, S.tileTarget].join("|");
+  if (sig !== S.signature){ S.signature = sig; S.ready = false; }
+}
+
+function setTarget(lat, lon, label){
+  S.lat = lat; S.lon = lon; S.label = label;
+  const m = lonLatToMerc(lon, lat);
+  S.mx = m[0]; S.my = m[1];
+  el("tlabel").textContent = label;
+  el("tcoord").textContent = lat.toFixed(5) + " N   " + lon.toFixed(5) + " E";
+  el("target").hidden = false;
+  el("results").innerHTML = "";
+  el("play").disabled = false;
+  el("rec").disabled = false;
+  el("empty").style.display = "none";
+  S.ready = false;
+  readSettings();
+  preview();
+}
+
+// aperçu rapide : uniquement les tuiles de la première image
+async function preview(){
+  if (S.busy || S.lat === null) return;
+  say("Chargement de l'aperçu…");
+  const maxZ = maxZoom();
+  const list = [];
+  for (const lv of levelsAt(S.s0, maxZ)){
+    const k = layerAt(lv.z), r = rangeAt(lv.z, S.s0, thetaAt(0));
+    for (let x = r.x0; x <= r.x1; x++)
+      for (let y = r.y0; y <= r.y1; y++)
+        if (!tiles.has(tkey(k, lv.z, x, y))) list.push({ k, z:lv.z, x, y });
+  }
+  if (list.length) loader.show("Chargement de l'aperçu", list.length + " tuiles IGN");
+  await loadMany(list, (d, n) => loader.set(d / n, d + " / " + n + " tuiles"));
+  loader.hide();
+  S.effMaxZ = maxZ;
+  frame(0, 0);
+  say("Aperçu de la première image. Prêt à lancer.");
+}
+
+// mesure les niveaux réellement servis pour ne jamais afficher un écran vide
+function computeEffectiveMaxZ(){
+  const nominal = maxZoom();
+  let best = 0;
+  for (let z = 0; z <= nominal; z++){
+    let ok = 0, tot = 0;
+    for (const [key, v] of tiles){
+      const p = key.split("/");
+      if (+p[1] !== z) continue;
+      tot++; if (!v.failed) ok++;
+    }
+    if (tot === 0) continue;
+    if (ok / tot >= 0.5) best = z;
+  }
+  return best || nominal;
+}
+
+async function prepare(){
+  if (S.ready) return true;
+  const list = planTiles();
+  if (list.length === 0){ S.effMaxZ = computeEffectiveMaxZ(); S.ready = true; return true; }
+  say("Chargement des tuiles IGN : 0 / " + list.length);
+  progress(0);
+  loader.show("Chargement des tuiles IGN", list.length + " tuiles à récupérer");
+  await loadMany(list, (d, n) => {
+    progress(d / n);
+    loader.set(d / n, d + " / " + n + " tuiles");
+    if (d % 8 === 0 || d === n) say("Chargement des tuiles IGN : " + d + " / " + n);
+  });
+  loader.set(1, "Prêt");
+  loader.hide();
+  S.effMaxZ = computeEffectiveMaxZ();
+  progress(1);
+  S.ready = true;
+  return true;
+}
+
+function lockUI(on){
+  S.busy = on;
+  el("play").disabled = on || S.lat === null;
+  el("rec").disabled  = on || S.lat === null;
+  el("find").disabled = on;
+}
+
+/* --- lancement --- */
+el("play").addEventListener("click", async () => {
+  readSettings();
+  lockUI(true);
+  try{
+    await document.fonts.ready;
+    await prepare();
+    say("Lecture…");
+    await runAnimation();
+    say("Terminé. Ajustez les réglages ou passez à l'enregistrement.");
+  }catch(e){
+    say("Échec du chargement : " + e.message, true);
+  }finally{ loader.hide(); lockUI(false); progress(0); }
+});
+
+/* --- enregistrement --- */
+function pickMime(){
+  const c = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4;codecs=avc1", "video/mp4"];
+  for (const m of c) if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+  return "";
+}
+
+el("rec").addEventListener("click", async () => {
+  readSettings();
+  if (!window.MediaRecorder){
+    say("Ce navigateur ne sait pas enregistrer une vidéo. Essayez Chrome, Edge ou Firefox.", true);
+    return;
+  }
+  lockUI(true);
+  try{
+    await document.fonts.ready;
+    await prepare();
+    const mime = pickMime();
+    const stream = out.captureStream(60);
+    const chunks = [];
+    const mr = new MediaRecorder(stream, mime ? { mimeType:mime, videoBitsPerSecond: 28000000 } : undefined);
+    mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise(r => { mr.onstop = r; });
+
+    frame(0, 0);
+    el("recdot").classList.add("on");
+    say("Enregistrement en cours…");
+    mr.start();
+    await runAnimation();
+    await new Promise(r => setTimeout(r, 220));
+    mr.stop();
+    await done;
+    el("recdot").classList.remove("on");
+
+    const type = mime || "video/webm";
+    const blob = new Blob(chunks, { type });
+    const ext = type.includes("mp4") ? "mp4" : "webm";
+    const slug = (S.label || "point").toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "zoom-" + (slug || "ign") + "." + ext;
+    a.click();
+    const mo = (blob.size / 1048576).toFixed(1);
+    say("Vidéo enregistrée (" + mo + " Mo). <a href='" + url + "' download='" + a.download + "'>Retélécharger</a>");
+  }catch(e){
+    el("recdot").classList.remove("on");
+    say("L'enregistrement a échoué : " + e.message, true);
+  }finally{ loader.hide(); lockUI(false); progress(0); }
+});
+
+/* --- recherche --- */
+async function doSearch(){
+  const q = el("q").value.trim();
+  if (!q) return;
+  const c = parseCoords(q);
+  if (c){ setTarget(c.lat, c.lon, "Point " + c.lat.toFixed(5) + ", " + c.lon.toFixed(5)); return; }
+  say("Recherche…");
+  el("find").disabled = true;
+  try{
+    const res = await geocode(q);
+    const ul = el("results");
+    ul.innerHTML = "";
+    if (!res.length){ say("Aucun lieu trouvé. Essayez une adresse plus complète, ou saisissez des coordonnées.", true); return; }
+    for (const r of res){
+      const li = document.createElement("li");
+      li.tabIndex = 0;
+      li.innerHTML = "";
+      li.append(r.label);
+      const i = document.createElement("i");
+      i.textContent = (r.extra ? r.extra + " · " : "") + r.lat.toFixed(5) + ", " + r.lon.toFixed(5);
+      li.append(i);
+      const pick = () => setTarget(r.lat, r.lon, r.label);
+      li.addEventListener("click", pick);
+      li.addEventListener("keydown", e => { if (e.key === "Enter") pick(); });
+      ul.append(li);
+    }
+    say("Choisissez un résultat dans la liste.");
+  }catch(e){
+    say("La recherche n'a pas abouti : " + e.message, true);
+  }finally{ el("find").disabled = false; }
+}
+el("find").addEventListener("click", doSearch);
+el("q").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+
+for (const b of document.querySelectorAll(".chips button")){
+  b.addEventListener("click", () => {
+    el("q").value = b.dataset.label;
+    setTarget(parseFloat(b.dataset.lat), parseFloat(b.dataset.lon), b.dataset.label);
+  });
+}
+
+/* --- réglages : redessine l'aperçu --- */
+let previewTimer = null;
+for (const id of ["dur","ease","w0","w1","hold0","hold1","rot","mode","res","qual","title","cMark","cTitle","cScale","cVig"]){
+  el(id).addEventListener("change", () => {
+    readSettings();
+    if (S.lat === null) return;
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(preview, 120);
+  });
+}
+
+/* --- logo incrusté, lu en local pour ne pas altérer l'export --- */
+el("logo").addEventListener("change", e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f){ logo.img = null; if (S.lat !== null) frame(0, 0); return; }
+  const r = new FileReader();
+  r.onload = () => {
+    const img = new Image();
+    img.onload = () => { logo.img = img; if (S.lat !== null) frame(0, 0); };
+    img.onerror = () => say("Ce fichier logo n'a pas pu être lu.", true);
+    img.src = r.result;
+  };
+  r.readAsDataURL(f);
+});
+
+readSettings();
+</script>
+</body>
+</html>
