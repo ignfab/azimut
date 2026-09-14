@@ -129,6 +129,12 @@ Le rendu est un pipeline WebGL de tuiles Web Mercator.
 - **Précision.** La conversion mercator vers coordonnées écran se fait en double
   précision côté JS ; seul le rectangle NDC est transmis au GPU. En float32 dans le
   shader, l'image se mettrait à cranter au-delà du zoom 15.
+- **Rendu accentué.** Passe d'étalonnage optionnelle en shader : masque flou à
+  seuil doux, saturation, contraste. Le seuil est essentiel — sans lui,
+  l'accentuation amplifierait autant le blocking JPEG des tuiles que les vrais
+  contours. Réglages dans la constante `BOOST` en tête de script.
+  L'étalonnage s'applique à l'image cartographique seule, jamais au cartouche
+  ni à l'échelle, qui sont composés ensuite en 2D.
 - **Composition 2D.** Le WebGL rend hors écran, un canvas 2D ajoute le vignettage,
   le repère, le cartouche et l'échelle. C'est ce canvas qui est capturé.
 

@@ -385,6 +385,7 @@ button.ghost:hover:not(:disabled){background:rgba(106,106,244,.14);color:var(--h
           <label class="check"><input type="checkbox" id="cTitle" checked> Titre</label>
           <label class="check"><input type="checkbox" id="cScale" checked> Échelle</label>
           <label class="check"><input type="checkbox" id="cVig" checked> Vignettage</label>
+          <label class="check"><input type="checkbox" id="cBoost" checked> Rendu accentué</label>
         </div>
       </div>
       </details>
@@ -687,6 +688,84 @@ function drawReveal(tex, t){
   gl.uniform3f(UR.accent, 0.416, 0.416, 0.957);
   gl.drawArrays(gl.TRIANGLES, 0, 6);
   gl.enable(gl.BLEND);
+}
+
+
+/* ---- passe d'étalonnage : accentuation et saturation ----
+   L'ortho IGN est une donnée de mesure, pas une image de reportage : elle est
+   volontairement neutre et peu contrastée. Cette passe lui donne du mordant.
+
+   Réglages, à ajuster librement :
+     sharpen    force du masque flou. Au-delà de 0.8, des halos apparaissent.
+     saturation 1.0 laisse les couleurs intactes.
+     contrast   appliqué autour du gris moyen.                                */
+const BOOST = { sharpen: 0.55, saturation: 1.22, contrast: 1.06 };
+
+const FS_G = `
+precision mediump float;
+uniform sampler2D u_scene;
+uniform vec2  u_texel;
+uniform float u_sharp, u_sat, u_con;
+varying vec2 v_uv;
+
+void main(){
+  vec3 c = texture2D(u_scene, v_uv).rgb;
+
+  // masque flou sur une croix de quatre voisins
+  vec3 b = (texture2D(u_scene, v_uv + vec2(u_texel.x, 0.0)).rgb
+          + texture2D(u_scene, v_uv - vec2(u_texel.x, 0.0)).rgb
+          + texture2D(u_scene, v_uv + vec2(0.0, u_texel.y)).rgb
+          + texture2D(u_scene, v_uv - vec2(0.0, u_texel.y)).rgb) * 0.25;
+  vec3 d = c - b;
+
+  // seuil doux : on accentue les vrais contours, pas le bruit ni le blocking JPEG
+  vec3 gate = smoothstep(vec3(0.006), vec3(0.030), abs(d));
+  vec3 s = c + d * u_sharp * gate;
+
+  float l = dot(s, vec3(0.299, 0.587, 0.114));
+  s = mix(vec3(l), s, u_sat);
+  s = (s - 0.5) * u_con + 0.5;
+
+  gl_FragColor = vec4(clamp(s, 0.0, 1.0), 1.0);
+}`;
+
+const progG = gl.createProgram();
+gl.attachShader(progG, compile(gl.VERTEX_SHADER, VS_R));
+gl.attachShader(progG, compile(gl.FRAGMENT_SHADER, FS_G));
+gl.linkProgram(progG);
+const UG = {
+  scene: gl.getUniformLocation(progG, "u_scene"),
+  texel: gl.getUniformLocation(progG, "u_texel"),
+  sharp: gl.getUniformLocation(progG, "u_sharp"),
+  sat:   gl.getUniformLocation(progG, "u_sat"),
+  con:   gl.getUniformLocation(progG, "u_con")
+};
+const aPosG = gl.getAttribLocation(progG, "a_pos");
+
+function drawGrade(tex){
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, S.W, S.H);
+  gl.disable(gl.BLEND);
+  gl.useProgram(progG);
+  gl.enableVertexAttribArray(aPosG);
+  gl.vertexAttribPointer(aPosG, 2, gl.FLOAT, false, 0, 0);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.uniform1i(UG.scene, 0);
+  gl.uniform2f(UG.texel, 1 / S.W, 1 / S.H);
+  gl.uniform1f(UG.sharp, BOOST.sharpen);
+  gl.uniform1f(UG.sat, BOOST.saturation);
+  gl.uniform1f(UG.con, BOOST.contrast);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  gl.enable(gl.BLEND);
+}
+
+// rendu d'une image du mouvement, étalonnée ou non
+function renderScene(cam, sharp){
+  if (!opt.cBoost){ renderGL(cam, null, sharp); return; }
+  const tgt = sceneTarget();
+  renderGL(cam, tgt.fbo, sharp);
+  drawGrade(tgt.tex);
 }
 
 /* =======================================================================
@@ -1091,7 +1170,7 @@ function drawScale(cam, k){
   ctx.restore();
 }
 
-let opt = { cMark:true, cTitle:true, cScale:true, cVig:true, title:"" };
+let opt = { cMark:true, cTitle:true, cScale:true, cVig:true, cBoost:true, title:"" };
 
 // grain très faible : casse les paliers du vignettage, que VP9 transformerait
 // sinon en bandes visibles dans les coins sombres.
@@ -1119,7 +1198,7 @@ const logo = { img:null };   // logo chargé localement, donc sans incidence sur
 
 function frame(t, time){
   const cam = cameraAt(t);
-  renderGL(cam, null, sharpAt(t));
+  renderScene(cam, sharpAt(t));
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, S.W, S.H);
   ctx.drawImage(glCanvas, 0, 0);
@@ -1242,6 +1321,7 @@ function readSettings(){
   opt = {
     cMark: el("cMark").checked, cTitle: el("cTitle").checked,
     cScale: el("cScale").checked, cVig: el("cVig").checked,
+    cBoost: el("cBoost").checked,
     title: el("title").value
   };
   if (S.lat !== null){
@@ -1633,7 +1713,7 @@ for (const b of document.querySelectorAll(".chips button")){
 
 /* --- réglages : redessine l'aperçu --- */
 let previewTimer = null;
-for (const id of ["dur","ease","w0","w1","hold0","hold1","rot","mode","res","qual","fps","vq","title","cMark","cTitle","cScale","cVig"]){
+for (const id of ["dur","ease","w0","w1","hold0","hold1","rot","mode","res","qual","fps","vq","title","cMark","cTitle","cScale","cVig","cBoost"]){
   el(id).addEventListener("change", () => {
     readSettings();
     clearTimeout(previewTimer);
