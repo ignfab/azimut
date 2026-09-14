@@ -44,7 +44,9 @@ distance, et moins qu'un zoom simple en deçà de quelques kilomètres.
 
 ## Utilisation
 
-À l'ouverture, la carte de France s'affiche. Cliquez dessus pour viser un point :
+À l'ouverture, la photo aérienne de la France s'affiche, au niveau le plus fin
+utile à cette échelle. Si l'ortho n'est pas servie à cette altitude, l'écran
+retombe de lui-même sur le plan IGN. Cliquez dessus pour viser un point :
 Azimut interroge le géocodage inverse pour en retrouver le nom.
 
 1. Choisissez le mouvement en haut du panneau.

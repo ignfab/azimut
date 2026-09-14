@@ -1725,25 +1725,43 @@ for (const id of ["dur","ease","w0","w1","hold0","hold1","rot","mode","res","qua
 async function homeView(){
   const m = lonLatToMerc(HOME.lon, HOME.lat);
   S.mx = m[0]; S.my = m[1];
-  S.forceLayer = "plan";                 // le plan couvre le monde aux petits zooms
-  S.effMaxZ = LAYERS.plan.maxZ;
   const s = groundToSpan(HOME.km * 1000, HOME.lat);
   const cam = { cx:S.mx, cy:S.my, span:s, theta:0 };
 
-  const list = [];
-  for (const lv of levelsAt(s, LAYERS.plan.maxZ)){
-    const r = rangeAt(lv.z, cam);
-    for (let x = r.x0; x <= r.x1; x++)
-      for (let y = r.y0; y <= r.y1; y++)
-        if (!tiles.has(tkey("plan", lv.z, x, y))) list.push({ k:"plan", z:lv.z, x, y });
-  }
-  if (list.length) loader.show("Chargement de la carte", list.length + " tuiles IGN");
+  // image fixe : on prend d'emblée le niveau le plus fin utile, d'où sharp = 1
+  const collect = k => {
+    const out = [];
+    for (const lv of levelsAt(s, LAYERS[k].maxZ, 1)){
+      const r = rangeAt(lv.z, cam);
+      for (let x = r.x0; x <= r.x1; x++)
+        for (let y = r.y0; y <= r.y1; y++)
+          if (!tiles.has(tkey(k, lv.z, x, y))) out.push({ k, z:lv.z, x, y });
+    }
+    return out;
+  };
+  const missing = list => list.filter(t =>
+    (tiles.get(tkey(t.k, t.z, t.x, t.y)) || {}).failed).length;
+
+  // la photo aérienne d'abord ; on ne retombe sur le plan que si elle
+  // n'est pas servie à cette échelle, ce qui se constate plutôt qu'il ne se suppose
+  S.forceLayer = "ortho";
+  S.effMaxZ = LAYERS.ortho.maxZ;
+  let list = collect("ortho");
+  if (list.length) loader.show("Chargement de la photo aérienne", list.length + " tuiles IGN");
   await loadMany(list, (d, n) => loader.set(d / n, d + " / " + n + " tuiles"));
+
+  if (list.length && missing(list) / list.length > 0.5){
+    S.forceLayer = "plan";
+    S.effMaxZ = LAYERS.plan.maxZ;
+    const fallback = collect("plan");
+    loader.show("Photo aérienne indisponible à cette échelle", "reprise sur le plan IGN");
+    await loadMany(fallback, (d, n) => loader.set(d / n, d + " / " + n + " tuiles"));
+  }
   loader.hide();
 
   // composition finale, identique avec ou sans animation d'ouverture
   const settle = () => {
-    renderGL(cam);
+    renderGL(cam, null, 1);
     compositeHome();
     say("Cliquez sur la carte pour viser un point.");
   };
@@ -1755,7 +1773,7 @@ async function homeView(){
   S.introDone = true;
   S.introStop = false;
   const target = sceneTarget();
-  renderGL(cam, target.fbo);
+  renderGL(cam, target.fbo, 1);
   say("");
 
   await new Promise(done => {
