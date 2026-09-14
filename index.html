@@ -131,6 +131,22 @@ button.ghost:hover:not(:disabled){background:rgba(106,106,244,.14);color:var(--h
 .check input:checked::after{transform:translateX(20px);
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236a6af4' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'><polyline points='4,13 9,18 20,6'/></svg>")}
 
+/* ---------- fichier et trace ---------- */
+.filerow input[type=file]{font-size:13px;color:var(--paper-dim);width:100%;font-family:inherit}
+.filerow input[type=file]::file-selector-button{
+  font-family:inherit;font-size:14px;background:var(--panel-2);color:var(--paper);
+  border:1px solid var(--line);border-radius:0;padding:7px 12px;margin-right:10px;cursor:pointer}
+.filerow input[type=file]::file-selector-button:hover{border-color:var(--hydro);color:#fff}
+#geoRow{margin-top:16px}
+#geoInfo{margin-top:10px;padding:10px 12px;background:var(--panel-2);
+  border-left:3px solid var(--ochre);display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
+#geoInfo b{display:block;width:100%;font-weight:700;font-size:14.5px}
+#geoInfo span{color:var(--paper-dim);font-size:13px;flex:1}
+#geoInfo button{padding:3px 9px;font-size:13px;background:transparent;
+  color:var(--paper-dim);border:1px solid var(--line)}
+#geoInfo button:hover{border-color:var(--alert);color:#ff8a80;background:transparent}
+#stage.drop{outline:2px dashed var(--hydro);outline-offset:-10px}
+
 /* ---------- selecteur de mode ---------- */
 .seg{display:grid;grid-template-columns:1fr 1fr;margin-bottom:18px}
 .seg button{background:transparent;border:1px solid var(--line);color:var(--paper-dim);
@@ -264,6 +280,15 @@ button.ghost:hover:not(:disabled){background:rgba(106,106,244,.14);color:var(--h
             <button data-lat="45.83262" data-lon="6.86500" data-label="Sommet du Mont Blanc">Mont Blanc</button>
           </div>
           <div id="target" hidden><b id="tlabel"></b><span id="tcoord"></span></div>
+
+          <div id="geoRow">
+            <label for="geo">Tracé GeoJSON — ou glissez le fichier sur la carte</label>
+            <div class="filerow">
+              <input type="file" id="geo" accept=".geojson,.json,application/geo+json,application/json">
+            </div>
+            <div id="geoInfo" hidden><b id="geoName"></b><span id="geoDetail"></span>
+              <button type="button" id="geoClear">Retirer</button></div>
+          </div>
         </div>
 
         <div class="pt" id="ptB" hidden>
@@ -484,7 +509,7 @@ function tileURL(key, z, x, y){
 const S = {
   lat:null, lon:null, label:"", mx:0, my:0,
   latB:null, lonB:null, labelB:"", mxB:0, myB:0,
-  trip:false, pick:"A", fly:null,
+  trip:false, pick:"A", fly:null, geo:null,
   W:1920, H:1080,
   duration:11, hold0:1, hold1:2, ease:"cinema",
   w0:1400000, w1:300,
@@ -1046,6 +1071,197 @@ function niceRound(max){
   return best;
 }
 
+
+/* =======================================================================
+   Tracés GeoJSON
+   ======================================================================= */
+const GEO_MARGIN = 1.30;   // marge autour du tracé dans l'image finale
+
+/* Beaucoup de fichiers français circulent en Lambert-93 malgré la spécification
+   GeoJSON, qui impose le WGS84. Chargés tels quels, ils envoient la caméra au
+   large de l'Afrique. On le détecte et on convertit.
+   Inverse validé contre pyproj : écart maximal 0,013 cm sur la France.        */
+function lambert93ToLonLat(X, Y){
+  const e = 0.0818191910428158;
+  const n = 0.7256077650, C = 11754255.426;
+  const Xs = 700000.0, Ys = 12655612.050, lon0 = 3 * D2R;
+  const dx = X - Xs, dy = Y - Ys;
+  const R = Math.hypot(dx, dy);
+  const lon = lon0 + Math.atan2(dx, -dy) / n;
+  const L = -Math.log(Math.abs(R / C)) / n;
+  let phi = 2 * Math.atan(Math.exp(L)) - Math.PI / 2;
+  for (let i = 0; i < 12; i++){
+    const s = e * Math.sin(phi);
+    phi = 2 * Math.atan(Math.pow((1 + s) / (1 - s), e / 2) * Math.exp(L)) - Math.PI / 2;
+  }
+  return [lon / D2R, phi / D2R];
+}
+
+// aplatit n'importe quelle géométrie en une liste de tracés
+function flattenGeometry(geom, out){
+  if (!geom) return;
+  const c = geom.coordinates;
+  switch (geom.type){
+    case "Point":           out.push({ type:"point",   raw:[c] }); break;
+    case "MultiPoint":      c.forEach(q => out.push({ type:"point", raw:[q] })); break;
+    case "LineString":      out.push({ type:"line",    raw:c }); break;
+    case "MultiLineString": c.forEach(l => out.push({ type:"line", raw:l })); break;
+    case "Polygon":         c.forEach(r => out.push({ type:"polygon", raw:r })); break;
+    case "MultiPolygon":    c.forEach(pg => pg.forEach(r => out.push({ type:"polygon", raw:r }))); break;
+    case "GeometryCollection": (geom.geometries || []).forEach(g => flattenGeometry(g, out)); break;
+  }
+}
+
+function parseGeoJSON(text, fallbackName){
+  const j = JSON.parse(text);
+  const feats = j.type === "FeatureCollection" ? (j.features || [])
+              : j.type === "Feature" ? [j]
+              : [{ type:"Feature", properties:{}, geometry:j }];
+
+  const shapes = [];
+  let label = "";
+  for (const f of feats){
+    const before = shapes.length;
+    flattenGeometry(f.geometry, shapes);
+    const pr = f.properties || {};
+    const nm = pr.name || pr.nom || pr.label || pr.title || "";
+    for (let i = before; i < shapes.length; i++) shapes[i].name = nm;
+    if (!label && nm) label = nm;
+  }
+  if (!shapes.length) throw new Error("aucune géométrie exploitable");
+
+  // détection du système de coordonnées sur l'ensemble des sommets
+  let projected = false;
+  for (const s of shapes)
+    for (const q of s.raw)
+      if (Math.abs(q[0]) > 180 || Math.abs(q[1]) > 90) projected = true;
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const s of shapes){
+    s.pts = s.raw.map(q => {
+      const ll = projected ? lambert93ToLonLat(q[0], q[1]) : [q[0], q[1]];
+      const m = lonLatToMerc(ll[0], ll[1]);
+      if (m[0] < minX) minX = m[0];
+      if (m[0] > maxX) maxX = m[0];
+      if (m[1] < minY) minY = m[1];
+      if (m[1] > maxY) maxY = m[1];
+      return m;
+    });
+    delete s.raw;
+  }
+
+  return { shapes, projected, bbox:{ minX, minY, maxX, maxY },
+           label: label || fallbackName,
+           count: shapes.length };
+}
+
+// étendue minimale pour que rien ne soit coupé, dans le format courant
+function geoMinSpan(){
+  if (!S.geo) return 0;
+  const b = S.geo.bbox;
+  return Math.max(b.maxX - b.minX, (b.maxY - b.minY) * (S.W / S.H)) * GEO_MARGIN;
+}
+
+// mercator vers pixels du canvas, en reproduisant la rotation du shader
+function project(cam, mx, my){
+  const px = (mx - cam.cx) / (cam.span / 2);
+  const py = -(my - cam.cy) / ((cam.span * S.H / S.W) / 2);
+  const a = S.W / S.H;
+  const c = Math.cos(cam.theta), s = Math.sin(cam.theta);
+  const qx = px * a, qy = py;
+  const rx = qx * c - qy * s, ry = qx * s + qy * c;
+  return [(rx / a + 1) / 2 * S.W, (1 - ry) / 2 * S.H];
+}
+
+// portion d'une polyligne correspondant à une fraction g de sa longueur
+function traceTo(pts, g){
+  if (g >= 1) return pts;
+  let total = 0;
+  const seg = [];
+  for (let i = 1; i < pts.length; i++){
+    const d = Math.hypot(pts[i][0] - pts[i-1][0], pts[i][1] - pts[i-1][1]);
+    seg.push(d); total += d;
+  }
+  if (total === 0) return pts.slice(0, 1);
+  const want = total * g;
+  const out = [pts[0]];
+  let acc = 0;
+  for (let i = 0; i < seg.length; i++){
+    if (acc + seg[i] <= want){ out.push(pts[i+1]); acc += seg[i]; continue; }
+    const f = seg[i] > 0 ? (want - acc) / seg[i] : 0;
+    out.push([pts[i][0] + (pts[i+1][0] - pts[i][0]) * f,
+              pts[i][1] + (pts[i+1][1] - pts[i][1]) * f]);
+    break;
+  }
+  return out;
+}
+
+// le tracé se dessine à l'approche du cadrage final
+function drawGeo(cam, t, k){
+  if (!S.geo || S.trip) return;
+  const g = smoothstep(0.55, 0.90, t);
+  if (g <= 0.001) return;
+  const ink = "#ffd166";
+
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  for (const sh of S.geo.shapes){
+    const pts = sh.pts.map(q => project(cam, q[0], q[1]));
+
+    if (sh.type === "point"){
+      const a = smoothstep(0, 0.4, g);
+      const [x, y] = pts[0];
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = "rgba(0,0,0,.6)"; ctx.lineWidth = 5 * k;
+      ctx.beginPath(); ctx.arc(x, y, 7 * k, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = ink;
+      ctx.beginPath(); ctx.arc(x, y, 6 * k, 0, Math.PI * 2); ctx.fill();
+      if (sh.name){
+        ctx.font = "600 " + (19 * k) + "px 'Barlow Semi Condensed', sans-serif";
+        ctx.textAlign = "left"; ctx.textBaseline = "middle";
+        ctx.shadowColor = "rgba(0,0,0,.85)"; ctx.shadowBlur = 8 * k;
+        ctx.fillStyle = "#fff";
+        ctx.fillText(sh.name, x + 14 * k, y);
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
+      continue;
+    }
+
+    const closed = sh.type === "polygon";
+    const full = closed ? pts.concat([pts[0]]) : pts;
+    const drawn = traceTo(full, g);
+    if (drawn.length < 2) continue;
+
+    ctx.beginPath();
+    ctx.moveTo(drawn[0][0], drawn[0][1]);
+    for (let i = 1; i < drawn.length; i++) ctx.lineTo(drawn[i][0], drawn[i][1]);
+
+    if (closed && g > 0.9){
+      ctx.globalAlpha = smoothstep(0.9, 1, g) * 0.16;
+      ctx.fillStyle = ink; ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // halo sombre : sans lui, un trait clair disparaît sur un champ clair
+    ctx.strokeStyle = "rgba(0,0,0,.55)"; ctx.lineWidth = 7.5 * k; ctx.stroke();
+    ctx.strokeStyle = ink; ctx.lineWidth = 3.2 * k; ctx.stroke();
+
+    // point de départ, et tête lumineuse tant que le tracé progresse
+    ctx.fillStyle = ink;
+    ctx.beginPath(); ctx.arc(drawn[0][0], drawn[0][1], 5 * k, 0, Math.PI * 2); ctx.fill();
+    if (g < 0.999){
+      const head = drawn[drawn.length - 1];
+      ctx.fillStyle = "#fff";
+      ctx.shadowColor = ink; ctx.shadowBlur = 14 * k;
+      ctx.beginPath(); ctx.arc(head[0], head[1], 5.5 * k, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+  ctx.restore();
+}
+
 function drawOverlay(cam, t, time){
   const W = S.W, H = S.H, k = H / 720;   // facteur d'échelle typographique
 
@@ -1058,6 +1274,8 @@ function drawOverlay(cam, t, time){
     dither();   // un dégradé sombre et lisse est ce qui bande le plus à l'encodage
   }
 
+  drawGeo(cam, t, k);
+
   // en mode trajet, le départ est nommé au décollage, l'arrivée à l'atterrissage
   const inB = smoothstep(0.68, 0.95, t);
   const inA = S.trip ? (1 - smoothstep(0.04, 0.15, t)) * (1 - inB) : 0;
@@ -1067,7 +1285,7 @@ function drawOverlay(cam, t, time){
              : inA > 0.01 ? { a:inA, lat:S.lat, lon:S.lon, txt:(S.label || "") }
              : null;
 
-  if (opt.cMark && show) drawPin(show.a, time, k);
+  if (opt.cMark && show && !(S.geo && !S.trip)) drawPin(show.a, time, k);
   if (opt.cTitle && show && show.txt.trim()) drawCard(show.txt.trim(), show.lat, show.lon, show.a, k);
 
   if (opt.cScale) drawScale(cam, k);
@@ -1327,12 +1545,15 @@ function readSettings(){
   if (S.lat !== null){
     S.s0 = clamp(groundToSpan(S.w0, S.lat), 1e-9, 1);
     S.s1 = clamp(groundToSpan(S.w1, S.lat), 1e-9, S.s0);
+    // le cadrage d'arrivée ne descend jamais en deçà de ce qui contient le tracé
+    if (S.geo && !S.trip) S.s1 = clamp(Math.max(S.s1, geoMinSpan()), 1e-9, S.s0);
   }
   out.width = glCanvas.width = S.W;
   out.height = glCanvas.height = S.H;
   buildFly();
   const sig = [S.lat, S.lon, S.latB, S.lonB, S.trip, S.W, S.H, S.duration,
-               S.ease, S.w0, S.w1, S.rot, S.mode, S.tileTarget].join("|");
+               S.ease, S.w0, S.w1, S.rot, S.mode, S.tileTarget,
+               S.geo ? S.geo.count + ":" + S.s1.toExponential(6) : ""].join("|");
   if (sig !== S.signature){ S.signature = sig; S.ready = false; }
 }
 
@@ -1377,6 +1598,7 @@ function setTrip(on){
   el("segOne").setAttribute("aria-pressed", String(!on));
   el("segTrip").setAttribute("aria-pressed", String(on));
   el("ptB").hidden = !on;
+  el("geoRow").hidden = on;
   el("pickHint").hidden = !on;
   el("labA").textContent = on ? "Départ" : "Adresse, lieu-dit, ou latitude et longitude";
 
@@ -1396,9 +1618,10 @@ async function preview(){
   if (S.busy || S.lat === null) return;
   say("Chargement de l'aperçu…");
   const maxZ = maxZoom();
-  const cam0 = cameraAt(0);
+  const tShow = (S.geo && !S.trip) ? 1 : 0;
+  const cam0 = cameraAt(tShow);
   const list = [];
-  for (const lv of levelsAt(cam0.span, maxZ)){
+  for (const lv of levelsAt(cam0.span, maxZ, sharpAt(tShow))){
     const k = layerAt(lv.z), r = rangeAt(lv.z, cam0);
     for (let x = r.x0; x <= r.x1; x++)
       for (let y = r.y0; y <= r.y1; y++)
@@ -1408,8 +1631,9 @@ async function preview(){
   await loadMany(list, (d, n) => loader.set(d / n, d + " / " + n + " tuiles"));
   loader.hide();
   S.effMaxZ = maxZ;
-  frame(0, 0);
-  say("Aperçu de la première image. Prêt à lancer.");
+  frame(tShow, 0);
+  say(tShow ? "Aperçu du cadrage final. Prêt à lancer."
+            : "Aperçu de la première image. Prêt à lancer.");
 }
 
 // mesure les niveaux réellement servis pour ne jamais afficher un écran vide
@@ -1837,6 +2061,59 @@ out.addEventListener("click", async e => {
   const label = await reverseLabel(lon, lat);
   setTarget(lat, lon, label || (lat.toFixed(5) + ", " + lon.toFixed(5)),
             S.trip ? S.pick : "A");
+});
+
+
+/* --- chargement d'un tracé, par le champ ou par glisser-déposer --- */
+function applyGeo(geo){
+  S.geo = geo;
+  const c = geo.bbox;
+  const mx = (c.minX + c.maxX) / 2, my = (c.minY + c.maxY) / 2;
+  const lon = mx * 360 - 180, lat = latFromMerc(my);
+
+  el("geoName").textContent = geo.label || "Tracé sans nom";
+  el("geoInfo").hidden = false;
+  el("geo").value = "";
+
+  setTarget(lat, lon, geo.label || "Tracé", "A");   // recadre sur le centre du tracé
+
+  const m = Math.round(spanToGround(S.s1, lat));
+  el("geoDetail").textContent = geo.count + (geo.count > 1 ? " géométries" : " géométrie")
+    + (geo.projected ? " — converti depuis Lambert-93" : "")
+    + " — cadre d'arrivée " + (m >= 1000 ? (m/1000).toFixed(1) + " km" : m + " m");
+  say("Tracé chargé. Le cadrage d'arrivée a été élargi pour le contenir entièrement.");
+}
+
+async function readGeoFile(file){
+  if (!file) return;
+  try{
+    const name = file.name.replace(/\.(geo)?json$/i, "");
+    applyGeo(parseGeoJSON(await file.text(), name));
+  }catch(e){
+    say("Ce fichier n'a pas pu être lu : " + e.message, true);
+  }
+}
+
+el("geo").addEventListener("change", e => readGeoFile(e.target.files && e.target.files[0]));
+
+el("geoClear").addEventListener("click", () => {
+  S.geo = null;
+  el("geoInfo").hidden = true;
+  S.ready = false;
+  readSettings();
+  if (S.lat !== null) preview();
+  say("Tracé retiré.");
+});
+
+const stage = document.getElementById("stage");
+for (const ev of ["dragenter", "dragover"])
+  stage.addEventListener(ev, e => { e.preventDefault(); stage.classList.add("drop"); });
+for (const ev of ["dragleave", "drop"])
+  stage.addEventListener(ev, e => { e.preventDefault(); stage.classList.remove("drop"); });
+stage.addEventListener("drop", e => {
+  if (S.trip){ say("Les tracés ne s'appliquent qu'au mode « Un point ».", true); return; }
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) readGeoFile(f);
 });
 
 /* --- logo IGN incrusté, livré avec le dépôt --- */

@@ -6,6 +6,23 @@ Géoplateforme IGN, et les exporte en vidéo. Pensé pour le montage d'un sujet 
 Tout tient dans `index.html` : pas de build, pas de dépendance, pas de clé d'API.
 Ouvrez le fichier dans un navigateur, ou servez-le en statique.
 
+## Tracés GeoJSON
+
+En mode « Un point », déposez un `.geojson` sur la carte ou passez par le champ
+prévu. Sont acceptés `FeatureCollection`, `Feature` et géométries nues, en
+Point, LineString, Polygon, leurs variantes Multi et `GeometryCollection`.
+
+- La caméra se recentre sur le tracé, et le cadrage d'arrivée est élargi pour
+  que rien ne soit coupé — une marge de 30 % est laissée autour de l'emprise.
+  Le réglage « cadre d'arrivée » reste une valeur plancher, jamais un plafond.
+- Le tracé se dessine entre 55 % et 90 % du mouvement, avec une tête lumineuse
+  en progression, puis reste posé pendant la pause finale.
+- La spécification GeoJSON impose le WGS84, mais beaucoup de fichiers français
+  circulent en Lambert-93. Azimut le détecte et convertit. L'inverse est validé
+  contre pyproj : écart maximal 0,013 cm sur la France.
+- Le nom vient de `properties.name`, `nom`, `label` ou `title`, et sert de titre
+  incrusté. Les Point nommés portent leur étiquette à côté du repère.
+
 ## Deux mouvements
 
 **Un point** — descente verticale depuis un cadre large jusqu'au point visé.
