@@ -1,7 +1,7 @@
 # Azimut
 
-Fabrique un travelling vertical vers n'importe quel point de France, sur les fonds
-de la Géoplateforme IGN, et l'exporte en vidéo. Pensé pour le montage d'un sujet TV.
+Produit des transitions douces d'une position à l'autre, sur les fonds de la
+Géoplateforme IGN, et les exporte en vidéo. Pensé pour le montage d'un sujet TV.
 
 Tout tient dans `index.html` : pas de build, pas de dépendance, pas de clé d'API.
 Ouvrez le fichier dans un navigateur, ou servez-le en statique.
