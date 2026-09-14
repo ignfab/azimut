@@ -7,164 +7,183 @@
 <link rel="icon" type="image/svg+xml" href="assets/azimut-icone.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600&family=Public+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+
 :root{
-  --console:#141d19;
-  --panel:#1d2a24;
-  --panel-2:#243329;
-  --line:#33443a;
-  --paper:#ece6d6;
-  --paper-dim:#9fae9f;
-  --hydro:#4fb3cf;
-  --hydro-deep:#2b7d95;
+  --console:#161616;
+  --panel:#1b1b1b;
+  --panel-2:#262626;
+  --line:#3a3a3a;
+  --line-soft:#2b2b2b;
+  --paper:#ffffff;
+  --paper-dim:#cecece;
+  --paper-mute:#929292;
+  --hydro:#6a6af4;
+  --hydro-hi:#8b8bf7;
+  --hydro-deep:#4a4ae8;
   --ochre:#e2a83c;
-  --alert:#d9634a;
-  --radius:3px;
+  --alert:#e1000f;
+  --focus:#0a76f6;
+  --radius:0px;
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{
   background:var(--console);
   color:var(--paper);
-  font-family:"Barlow Semi Condensed",system-ui,sans-serif;
-  font-size:15px;
-  line-height:1.45;
-  overflow:hidden;
+  font-family:'Public Sans','Segoe UI',system-ui,sans-serif;
+  font-size:15px;line-height:1.5;overflow:hidden;
 }
-h1,h2,h3,.num{font-family:"Barlow Condensed","Barlow Semi Condensed",sans-serif}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 
 /* ---------- structure ---------- */
-#app{display:grid;grid-template-columns:352px 1fr;height:100%}
-#console{
-  background:var(--panel);
-  border-right:1px solid var(--line);
-  display:flex;flex-direction:column;min-height:0;
-}
-#stage{
-  position:relative;display:flex;align-items:center;justify-content:center;
-  background:
-    repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 44px),
-    repeating-linear-gradient(90deg,rgba(255,255,255,.022) 0 1px,transparent 1px 44px),
-    #0e1512;
-  padding:22px;min-width:0;
-}
-#out{
-  max-width:100%;max-height:100%;
-  box-shadow:0 24px 60px rgba(0,0,0,.55);
-  background:#0e1512;
-  border-radius:2px;
-}
+#app{display:grid;grid-template-columns:380px 1fr;height:100%}
+#console{background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0}
+#stage{position:relative;display:flex;align-items:center;justify-content:center;
+  background:#0f0f0f;padding:22px;min-width:0}
+#out{max-width:100%;max-height:100%;background:#0f0f0f;cursor:crosshair;
+  box-shadow:0 20px 50px rgba(0,0,0,.6)}
 #gl{display:none}
 
-/* ---------- console header ---------- */
-.head{padding:20px 22px 16px;border-bottom:1px solid var(--line)}
+/* ---------- en-tete ---------- */
+.head{padding:20px 24px 18px;border-bottom:1px solid var(--line)}
 .brand{display:flex;align-items:center;gap:13px}
 .brand-mark{width:60px;height:60px;flex:none}
-.head h1{
-  margin:0;font-size:36px;font-weight:600;letter-spacing:.055em;
-  line-height:1;color:var(--paper);text-transform:uppercase;
-}
-.head p{margin:12px 0 0;color:var(--paper-dim);font-size:13.5px;max-width:32ch}
+.brand-ign{margin-left:auto;flex:none;display:flex;align-items:center;
+  padding-left:13px;border-left:1px solid var(--line)}
+.brand-ign img{display:block;height:30px;width:auto;max-width:84px;
+  background:#fff;padding:4px 6px}
+.head h1{margin:0;font-family:'Barlow Condensed','Public Sans',sans-serif;
+  font-size:36px;font-weight:600;letter-spacing:.055em;line-height:1;
+  color:var(--paper);text-transform:uppercase}
+.head p{margin:12px 0 0;color:var(--paper-dim);font-size:13.5px;max-width:36ch}
 
-/* ---------- scrolling body ---------- */
-.body{overflow-y:auto;flex:1;padding:4px 22px 20px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
-.group{padding:18px 0;border-bottom:1px solid var(--line)}
+/* ---------- corps ---------- */
+.body{overflow-y:auto;flex:1;padding:0 24px 20px;
+  scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.group{padding:20px 0;border-bottom:1px solid var(--line-soft)}
 .group:last-child{border-bottom:none}
-.group > h2{
-  margin:0 0 12px;font-size:16px;font-weight:600;color:var(--ochre);letter-spacing:.01em;
-}
-label{display:block;font-size:13.5px;color:var(--paper-dim);margin-bottom:5px}
-.field{margin-bottom:13px}
+.group > h2{margin:0 0 14px;font-size:16px;font-weight:700;color:var(--paper)}
+label{display:block;font-size:13.5px;color:var(--paper-dim);margin-bottom:6px}
+.field{margin-bottom:15px}
 .field:last-child{margin-bottom:0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.hint{font-size:12.5px;color:var(--paper-mute);margin-top:6px}
+
+/* champs, dans l'esprit DSFR : fond plein, soulignement, angles vifs */
 input[type=text],input[type=number],select{
-  width:100%;padding:8px 10px;background:var(--panel-2);color:var(--paper);
-  border:1px solid var(--line);border-radius:var(--radius);
+  width:100%;padding:9px 11px;background:var(--panel-2);color:var(--paper);
+  border:0;border-bottom:2px solid var(--paper-mute);border-radius:0;
   font-family:inherit;font-size:15px;outline:none;
 }
 input[type=number]{font-variant-numeric:tabular-nums}
-input:focus,select:focus{border-color:var(--hydro);box-shadow:0 0 0 2px rgba(79,179,207,.18)}
-select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--paper-dim) 50%),linear-gradient(135deg,var(--paper-dim) 50%,transparent 50%);background-position:calc(100% - 16px) 52%,calc(100% - 11px) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:30px}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.hint{font-size:12.5px;color:#7d8f80;margin-top:5px}
+input:focus,select:focus{border-bottom-color:var(--paper);outline:2px solid var(--focus);outline-offset:2px}
+select{appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--paper) 50%),linear-gradient(135deg,var(--paper) 50%,transparent 50%);
+  background-position:calc(100% - 17px) 54%,calc(100% - 12px) 54%;
+  background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:32px}
 
-/* search */
-.searchbar{display:flex;gap:8px}
+/* boutons */
+button{font-family:inherit;font-size:15px;border-radius:0;cursor:pointer;
+  padding:9px 16px;border:1px solid transparent;
+  background:var(--hydro);color:#fff;font-weight:500}
+button:hover:not(:disabled){background:var(--hydro-hi)}
+button:disabled{opacity:.4;cursor:default}
+button.ghost{background:transparent;color:var(--hydro);border-color:var(--hydro)}
+button.ghost:hover:not(:disabled){background:rgba(106,106,244,.14);color:var(--hydro-hi)}
+
+.searchbar{display:flex;gap:0}
 .searchbar input{flex:1}
-button{
-  font-family:"Barlow Semi Condensed",sans-serif;font-size:15px;
-  background:var(--panel-2);color:var(--paper);
-  border:1px solid var(--line);border-radius:var(--radius);
-  padding:8px 13px;cursor:pointer;
-}
-button:hover:not(:disabled){border-color:var(--hydro);color:#fff}
-button:disabled{opacity:.42;cursor:default}
-button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--hydro);outline-offset:2px}
+.searchbar button{flex:none}
 
-#results{list-style:none;margin:9px 0 0;padding:0;max-height:196px;overflow-y:auto}
-#results li{padding:7px 10px;border:1px solid transparent;border-radius:var(--radius);cursor:pointer;font-size:14px}
-#results li:hover,#results li:focus{background:var(--panel-2);border-color:var(--line)}
-#results li i{display:block;font-style:normal;color:var(--paper-dim);font-size:12.5px;font-variant-numeric:tabular-nums}
+#results{list-style:none;margin:10px 0 0;padding:0;max-height:210px;overflow-y:auto}
+#results li{padding:9px 11px;border-left:2px solid transparent;cursor:pointer;font-size:14px;
+  background:var(--panel-2);margin-bottom:2px}
+#results li:hover,#results li:focus{border-left-color:var(--hydro);background:#2f2f2f}
+#results li i{display:block;font-style:normal;color:var(--paper-dim);font-size:12.5px;
+  font-variant-numeric:tabular-nums}
 
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.chips button{padding:4px 9px;font-size:13px;color:var(--paper-dim);background:transparent}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.chips button{padding:5px 10px;font-size:13px;background:transparent;
+  color:var(--paper-dim);border:1px solid var(--line)}
+.chips button:hover{background:var(--panel-2);border-color:var(--hydro);color:var(--paper)}
 
-#target{
-  margin-top:12px;padding:10px 12px;background:var(--panel-2);
-  border-left:2px solid var(--hydro);border-radius:0 var(--radius) var(--radius) 0;
-}
-#target b{font-weight:600;font-size:15px;display:block}
+#target{margin-top:14px;padding:11px 13px;background:var(--panel-2);
+  border-left:3px solid var(--hydro)}
+#target b{font-weight:700;font-size:15px;display:block}
 #target span{color:var(--paper-dim);font-size:13px;font-variant-numeric:tabular-nums}
 
-/* checkboxes */
-.checks{display:grid;grid-template-columns:1fr 1fr;gap:7px 14px}
-.check{display:flex;align-items:center;gap:7px;font-size:14px;color:var(--paper);cursor:pointer;margin:0}
-.check input{accent-color:var(--hydro);width:15px;height:15px;margin:0}
+/* interrupteurs */
+.checks{display:block}
+.check{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  font-size:14.5px;color:var(--paper);cursor:pointer;margin:0;
+  padding:11px 0;border-bottom:1px solid var(--line-soft)}
+.checks .check:last-child{border-bottom:none}
+.check input{appearance:none;-webkit-appearance:none;margin:0;flex:none;position:relative;
+  width:44px;height:24px;border-radius:12px;background:#565656;cursor:pointer;
+  transition:background .15s}
+.check input:checked{background:var(--hydro)}
+.check input::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;
+  border-radius:50%;background:#fff;transition:transform .15s;
+  background-repeat:no-repeat;background-position:center;background-size:11px}
+.check input:checked::after{transform:translateX(20px);
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236a6af4' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'><polyline points='4,13 9,18 20,6'/></svg>")}
 
-/* footer / actions */
-.actions{padding:16px 22px;border-top:1px solid var(--line);background:var(--panel)}
-.actions .go{
-  width:100%;background:var(--hydro);color:#08130f;border-color:var(--hydro);
-  font-size:17px;font-weight:600;padding:11px;letter-spacing:.01em;
-}
-.actions .go:hover:not(:disabled){background:#63c6e0;color:#08130f}
-.actions .rec{width:100%;margin-top:8px;border-color:var(--alert);color:#f0b0a3}
-.actions .rec:hover:not(:disabled){background:rgba(217,99,74,.16);color:#fff;border-color:var(--alert)}
-.meter{height:3px;background:var(--line);border-radius:2px;margin-top:12px;overflow:hidden}
+/* ---------- accordeons ---------- */
+.fold{padding:0}
+.fold > summary{list-style:none;cursor:pointer;padding:17px 0;
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:16px;font-weight:700;color:var(--paper)}
+.fold > summary::-webkit-details-marker{display:none}
+.fold > summary:hover{color:var(--hydro-hi)}
+.fold > summary::after{content:"";flex:none;width:9px;height:9px;margin-right:4px;
+  border-right:2px solid var(--hydro);border-bottom:2px solid var(--hydro);
+  transform:translateY(-3px) rotate(45deg);transition:transform .15s}
+.fold[open] > summary::after{transform:translateY(2px) rotate(-135deg)}
+.fold[open] > summary{color:var(--hydro-hi)}
+.fold-body{padding-bottom:20px}
+
+/* ---------- actions ---------- */
+.actions{padding:18px 24px;border-top:1px solid var(--line);background:var(--panel)}
+.actions .go{width:100%;font-size:16px;font-weight:500;padding:12px}
+.actions .rec{width:100%;margin-top:10px;background:transparent;
+  border-color:var(--alert);color:#ff8a80}
+.actions .rec:hover:not(:disabled){background:rgba(225,0,15,.16);color:#fff}
+.meter{height:4px;background:var(--line);margin-top:14px;overflow:hidden}
 .meter i{display:block;height:100%;width:0;background:var(--hydro);transition:width .12s linear}
-.status{font-size:13px;color:var(--paper-dim);margin-top:8px;min-height:19px;font-variant-numeric:tabular-nums}
-.status a{color:var(--hydro)}
-.status.err{color:#f0a08f}
+.status{font-size:13px;color:var(--paper-dim);margin-top:9px;min-height:19px;
+  font-variant-numeric:tabular-nums}
+.status a{color:var(--hydro-hi)}
+.status.err{color:#ff8a80}
 
-/* stage badges */
-#recdot{
-  position:absolute;top:34px;left:34px;display:none;align-items:center;gap:8px;
-  font-size:14px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.8);
-}
+/* ---------- surcouches de la scene ---------- */
+#recdot{position:absolute;top:34px;left:34px;display:none;align-items:center;gap:8px;
+  font-size:14px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.8)}
 #recdot.on{display:flex}
 #recdot em{width:11px;height:11px;border-radius:50%;background:var(--alert);animation:blink 1s infinite}
 @keyframes blink{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){#recdot em{animation:none}}
 
-#empty{position:absolute;color:#5c6f62;font-size:16px;text-align:center;max-width:34ch;pointer-events:none}
+#empty{position:absolute;bottom:46px;left:50%;transform:translateX(-50%);
+  background:rgba(22,22,22,.93);border-left:3px solid var(--hydro);
+  padding:15px 22px;max-width:min(520px,80%);pointer-events:none}
+#empty b{display:block;font-size:17px;font-weight:700;margin-bottom:3px}
+#empty span{font-size:14px;color:var(--paper-dim)}
 
-/* chargement, au centre de la zone image */
-#loader{
-  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
-  background:rgba(9,17,14,.74);backdrop-filter:blur(3px);
-}
+#loader{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  background:rgba(15,15,15,.82)}
 #loader.on{display:flex}
 .lcard{width:min(400px,78%);text-align:center;padding:30px 34px}
-.lnum{
-  font-family:"Barlow Condensed",sans-serif;font-size:74px;font-weight:600;
-  line-height:.92;color:var(--hydro);font-variant-numeric:tabular-nums;
-}
+.lnum{font-family:'Barlow Condensed','Public Sans',sans-serif;font-size:74px;font-weight:600;
+  line-height:.92;color:var(--hydro-hi);font-variant-numeric:tabular-nums}
 .lnum small{font-size:30px;font-weight:500;color:var(--paper-dim);margin-left:2px}
 .ltxt{margin-top:10px;font-size:17px;color:var(--paper)}
-.lbar{height:5px;background:#2b3a31;border-radius:3px;margin-top:18px;overflow:hidden}
+.lbar{height:5px;background:#3a3a3a;margin-top:18px;overflow:hidden}
 .lbar i{display:block;height:100%;width:0;background:var(--hydro);transition:width .1s linear}
-.lsub{margin-top:9px;font-size:14px;color:var(--paper-dim);font-variant-numeric:tabular-nums;min-height:20px}
-
+.lsub{margin-top:9px;font-size:14px;color:var(--paper-dim);
+  font-variant-numeric:tabular-nums;min-height:20px}
 
 @media (max-width:900px){
   #app{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow:auto}
@@ -203,6 +222,9 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
           </g>
         </svg>
         <h1>Azimut</h1>
+        <span class="brand-ign" id="brandIgn" title="Données IGN — Géoplateforme">
+          <img src="assets/ign_logo.png" alt="IGN">
+        </span>
       </div>
       <p>Fabrique un travelling vertical vers n'importe quel point de France, sur les fonds de l'IGN.</p>
     </div>
@@ -229,8 +251,9 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
         </div>
       </section>
 
-      <section class="group">
-        <h2>Mouvement</h2>
+      <details class="group fold">
+        <summary>Mouvement</summary>
+        <div class="fold-body">
         <div class="field row">
           <div>
             <label for="dur">Durée du zoom (s)</label>
@@ -271,10 +294,12 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
           <label for="rot">Rotation pendant la descente (°) — se termine plein nord</label>
           <input type="number" id="rot" value="6" min="0" max="25" step="1">
         </div>
-      </section>
+      </div>
+      </details>
 
-      <section class="group">
-        <h2>Image</h2>
+      <details class="group fold">
+        <summary>Image</summary>
+        <div class="fold-body">
         <div class="field row">
           <div>
             <label for="mode">Fond</label>
@@ -287,8 +312,8 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
           <div>
             <label for="res">Format</label>
             <select id="res">
-              <option value="1280x720" selected>1280 × 720</option>
-              <option value="1920x1080">1920 × 1080</option>
+              <option value="1920x1080" selected>1920 × 1080</option>
+              <option value="1280x720">1280 × 720</option>
               <option value="1080x1350">1080 × 1350 (portrait)</option>
               <option value="1080x1920">1080 × 1920 (vertical)</option>
             </select>
@@ -302,6 +327,26 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
             <option value="224">Fine</option>
           </select>
         </div>
+        <div class="field row">
+          <div>
+            <label for="fps">Cadence (i/s)</label>
+            <select id="fps">
+              <option value="50" selected>50 — diffusion</option>
+              <option value="25">25</option>
+              <option value="30">30</option>
+              <option value="60">60</option>
+            </select>
+          </div>
+          <div>
+            <label for="vq">Qualité d'export</label>
+            <select id="vq">
+              <option value="max" selected>Maximale</option>
+              <option value="haute">Haute</option>
+              <option value="standard">Standard</option>
+              <option value="png">Images PNG</option>
+            </select>
+          </div>
+        </div>
         <div class="field">
           <label for="title">Titre affiché à l'arrivée</label>
           <input type="text" id="title" placeholder="repris du lieu recherché">
@@ -312,23 +357,24 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
           <label class="check"><input type="checkbox" id="cScale" checked> Échelle</label>
           <label class="check"><input type="checkbox" id="cVig" checked> Vignettage</label>
         </div>
-      </section>
+      </div>
+      </details>
 
     </div>
 
     <div class="actions">
       <button class="go" id="play" disabled>Lancer l'animation</button>
-      <button class="rec" id="rec" disabled>Enregistrer la vidéo</button>
+      <button class="rec ghost" id="rec" disabled>Enregistrer la vidéo</button>
       <div class="meter"><i id="bar"></i></div>
       <div class="status" id="status">Choisissez d'abord un point à viser.</div>
     </div>
   </aside>
 
   <main id="stage">
-    <canvas id="out" width="1280" height="720"></canvas>
+    <canvas id="out" width="1920" height="1080"></canvas>
     <canvas id="gl"></canvas>
     <div id="recdot"><em></em>Enregistrement</div>
-    <div id="empty">La prévisualisation apparaîtra ici une fois le point choisi.</div>
+    <div id="empty"><b>Choisissez un point à viser</b><span>Cliquez directement sur la carte, ou cherchez une adresse dans le panneau.</span></div>
     <div id="loader">
       <div class="lcard">
         <div class="lnum"><span id="lpct">0</span><small>%</small></div>
@@ -378,7 +424,12 @@ const SWITCH_Z = 12;   // niveau où le plan cède la place à la photo, en mode
 // logo incrusté dans le cartouche. Remplacez le fichier pour changer de marque.
 const IGN_LOGO_URL = "assets/ign_logo.png";
 
+// niveaux où la photo aérienne n'est pas servie : constaté, pas supposé
+const levelLayer = new Map();
+
 function layerAt(z){
+  if (S.forceLayer) return S.forceLayer;
+  if (levelLayer.has(z)) return levelLayer.get(z);
   if (S.mode === "plan")  return "plan";
   if (S.mode === "ortho") return "ortho";
   return z < SWITCH_Z ? "plan" : "ortho";
@@ -399,14 +450,21 @@ function tileURL(key, z, x, y){
    ======================================================================= */
 const S = {
   lat:null, lon:null, label:"", mx:0, my:0,
-  W:1280, H:720,
+  W:1920, H:1080,
   duration:11, hold0:1, hold1:2, ease:"cinema",
   w0:1400000, w1:300,
-  rot:6, mode:"ortho", tileTarget:288,
+  rot:6, mode:"ortho", tileTarget:288, fps:50, vq:"max",
   s0:0.05, s1:1e-5,
   effMaxZ:20,
-  ready:false, signature:"", busy:false
+  ready:false, signature:"", busy:false,
+  forceLayer:null, introDone:false, introStop:false
 };
+
+// derniere vue affichee, pour convertir un clic ecran en coordonnees
+const view = { cx:0, cy:0, span:1, theta:0 };
+
+// cadrage de l'ecran d'accueil : la France entiere
+const HOME = { lon:2.45, lat:46.6, km:1600 };
 
 const EASINGS = {
   lineaire: t => t,
@@ -428,11 +486,12 @@ if (!gl) alert("Votre navigateur ne prend pas en charge WebGL.");
 const VS = `
 attribute vec2 a_pos;
 uniform vec4 u_rect;    // x, y, largeur, hauteur en coordonnées écran normalisées
+uniform vec4 u_uv;      // origine puis taille dans la texture : tout ou un quartier
 uniform vec2 u_rot;     // cos, sin
 uniform float u_aspect; // largeur / hauteur
 varying vec2 v_uv;
 void main(){
-  v_uv = vec2(a_pos.x, 1.0 - a_pos.y);
+  v_uv = u_uv.xy + vec2(a_pos.x, 1.0 - a_pos.y) * u_uv.zw;
   vec2 p = u_rect.xy + a_pos * u_rect.zw;
   vec2 q = vec2(p.x * u_aspect, p.y);
   q = vec2(q.x * u_rot.x - q.y * u_rot.y, q.x * u_rot.y + q.y * u_rot.x);
@@ -462,6 +521,7 @@ gl.useProgram(prog);
 
 const U = {
   rect:   gl.getUniformLocation(prog, "u_rect"),
+  uv:     gl.getUniformLocation(prog, "u_uv"),
   rot:    gl.getUniformLocation(prog, "u_rot"),
   aspect: gl.getUniformLocation(prog, "u_aspect"),
   alpha:  gl.getUniformLocation(prog, "u_alpha"),
@@ -480,32 +540,164 @@ gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
 gl.uniform1i(U.tex, 0);
 
+
+/* ---- passe de révélation : balayage d'azimut à l'ouverture ---- */
+const VS_R = `
+attribute vec2 a_pos;
+varying vec2 v_uv;
+void main(){
+  v_uv = a_pos;
+  gl_Position = vec4(a_pos * 2.0 - 1.0, 0.0, 1.0);
+}`;
+const FS_R = `
+precision mediump float;
+uniform sampler2D u_scene;
+uniform float u_t;        // avancement 0..1
+uniform float u_aspect;
+uniform vec3  u_bg;
+uniform vec3  u_accent;
+varying vec2 v_uv;
+
+void main(){
+  // le cadrage se relâche légèrement pendant la révélation
+  float zoom = mix(1.05, 1.0, u_t);
+  vec2 uv = (v_uv - 0.5) / zoom + 0.5;
+  vec3 src = texture2D(u_scene, uv).rgb;
+
+  vec2 p = (v_uv - 0.5) * vec2(u_aspect, 1.0);
+  float maxR = 0.5 * sqrt(u_aspect * u_aspect + 1.0);
+  float r = length(p) / maxR;
+
+  // azimut : 0 au nord, croissant dans le sens horaire
+  float az = fract(atan(p.x, p.y) / 6.2831853);
+
+  float lum = dot(src, vec3(0.299, 0.587, 0.114));
+
+  // instant d'arrivée du pixel : rayon d'abord, balayage ensuite,
+  // et les zones sombres suivent les zones claires
+  float arrive = 0.64 * r + 0.30 * az + (0.5 - lum) * 0.10;
+  float k = smoothstep(arrive, arrive + 0.14, u_t * 1.28);
+
+  float edge = pow(k * (1.0 - k) * 4.0, 2.2);   // liseré étroit, à mi-révélation
+  vec3 tinted = mix(vec3(lum), src, k);         // gris puis couleur
+  vec3 col = mix(u_bg, tinted * (1.0 - 0.18 * edge), k) + u_accent * edge * 0.55;
+
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+const progR = gl.createProgram();
+gl.attachShader(progR, compile(gl.VERTEX_SHADER, VS_R));
+gl.attachShader(progR, compile(gl.FRAGMENT_SHADER, FS_R));
+gl.linkProgram(progR);
+const UR = {
+  scene:  gl.getUniformLocation(progR, "u_scene"),
+  t:      gl.getUniformLocation(progR, "u_t"),
+  aspect: gl.getUniformLocation(progR, "u_aspect"),
+  bg:     gl.getUniformLocation(progR, "u_bg"),
+  accent: gl.getUniformLocation(progR, "u_accent")
+};
+const aPosR = gl.getAttribLocation(progR, "a_pos");
+
+// cible hors écran, recréée si le format change
+let scene = null;
+function sceneTarget(){
+  if (scene && scene.w === S.W && scene.h === S.H) return scene;
+  if (scene){ gl.deleteFramebuffer(scene.fbo); gl.deleteTexture(scene.tex); }
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, S.W, S.H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  scene = { tex, fbo, w:S.W, h:S.H };
+  return scene;
+}
+
+function drawReveal(tex, t){
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, S.W, S.H);
+  gl.disable(gl.BLEND);
+  gl.useProgram(progR);
+  gl.enableVertexAttribArray(aPosR);
+  gl.vertexAttribPointer(aPosR, 2, gl.FLOAT, false, 0, 0);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.uniform1i(UR.scene, 0);
+  gl.uniform1f(UR.t, t);
+  gl.uniform1f(UR.aspect, S.W / S.H);
+  gl.uniform3f(UR.bg, 0.059, 0.059, 0.059);
+  gl.uniform3f(UR.accent, 0.416, 0.416, 0.957);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  gl.enable(gl.BLEND);
+}
+
 /* =======================================================================
    5. Cache de tuiles
    ======================================================================= */
 const tiles = new Map();                       // clé -> {tex} | {failed:true}
 const tkey = (k, z, x, y) => k + "/" + z + "/" + x + "/" + y;
 
-function loadTile(k, z, x, y){
+const TILE_TIMEOUT = 5000;   // au-delà, la requête est abandonnée puis retentée
+const PARALLEL = 8;          // au-delà, HTTP/2 commence à réinitialiser des flux
+
+function uploadTile(key, src){
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  tiles.set(key, { tex });
+}
+
+// décodage d'un blob, avec repli sur <img> si createImageBitmap manque
+async function decode(blob){
+  if (window.createImageBitmap) return await createImageBitmap(blob);
+  const url = URL.createObjectURL(blob);
+  try{
+    return await new Promise((ok, ko) => {
+      const im = new Image();
+      im.onload = () => ok(im);
+      im.onerror = ko;
+      im.src = url;
+    });
+  } finally { setTimeout(() => URL.revokeObjectURL(url), 0); }
+}
+
+async function loadTile(k, z, x, y){
   const key = tkey(k, z, x, y);
-  if (tiles.has(key)) return Promise.resolve();
-  return new Promise(resolve => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const tex = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      tiles.set(key, { tex });
-      resolve();
-    };
-    img.onerror = () => { tiles.set(key, { failed:true }); resolve(); };
-    img.src = tileURL(k, z, x, y);
-  });
+  if (tiles.has(key)) return;
+  const url = tileURL(k, z, x, y);
+
+  for (let attempt = 0; attempt < 3; attempt++){
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), TILE_TIMEOUT);
+    try{
+      const r = await fetch(url, { signal: ac.signal, mode:"cors", credentials:"omit" });
+      clearTimeout(timer);
+      if (!r.ok){
+        // 4xx : la donnée n'existe pas à cet endroit. Insister ne sert à rien
+        // et coûte trois requêtes plus deux pauses par tuile.
+        if (r.status >= 400 && r.status < 500) break;
+        throw new Error("HTTP " + r.status);
+      }
+      const bmp = await decode(await r.blob());
+      uploadTile(key, bmp);
+      if (bmp.close) bmp.close();
+      return;
+    }catch(err){
+      clearTimeout(timer);
+      if (attempt === 2) break;
+      await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+    }
+  }
+  tiles.set(key, { failed:true });
 }
 
 async function loadMany(list, onProgress){
@@ -517,7 +709,7 @@ async function loadMany(list, onProgress){
       onProgress(++done, list.length);
     }
   };
-  await Promise.all(Array.from({ length:12 }, worker));
+  await Promise.all(Array.from({ length:PARALLEL }, worker));
 }
 
 /* =======================================================================
@@ -525,17 +717,30 @@ async function loadMany(list, onProgress){
    ======================================================================= */
 const FADE_START = 0.45;   // le niveau supérieur n'apparaît qu'au-delà de ce seuil
 
-// niveaux dessinés pour une étendue s donnée : [{z, alpha}]
-function levelsAt(s, maxZ){
+// montée en netteté sur la fin du mouvement, puis maintenue pendant la pause
+const sharpAt = t => smoothstep(0.86, 1, t);
+
+// niveaux dessinés pour une étendue s donnée : [{z, alpha}], du plus grossier au plus fin
+function levelsAt(s, maxZ, sharp){
   const zf = Math.log2(S.W / (S.tileTarget * s));
-  let zi = Math.floor(zf);
-  const f = zf - zi;
-  zi = clamp(zi, 0, maxZ);
-  const out = [{ z:zi, alpha:1 }];
-  if (zi < maxZ && f > FADE_START){
-    out.push({ z: zi + 1, alpha: smoothstep(FADE_START, 1, f) });
+  const zi = clamp(Math.floor(zf), 0, maxZ);
+  const f = zf - Math.floor(zf);
+
+  const lv = new Map();
+  lv.set(zi, 1);                                   // socle, couvre tout l'écran
+
+  // fondu vers le niveau suivant : rend le changement de résolution invisible
+  if (zi < maxZ && f > FADE_START) lv.set(zi + 1, smoothstep(FADE_START, 1, f));
+
+  // à l'arrivée, on prend le niveau dont la résolution native est la plus proche
+  // de celle de l'écran. Arrondir plutôt que plafonner évite de descendre sur un
+  // niveau si fin qu'il serait réduit de moitié, ce qui crénellerait au lieu d'affiner.
+  if (sharp > 0){
+    const zBest = clamp(Math.round(Math.log2(S.W / (256 * s))), 0, maxZ);
+    if (zBest > zi) lv.set(zBest, Math.max(lv.get(zBest) || 0, sharp));
   }
-  return out;
+
+  return [...lv.entries()].sort((a, b) => a[0] - b[0]).map(e => ({ z:e[0], alpha:e[1] }));
 }
 
 // emprise visible en tuiles, boîte englobante après rotation
@@ -562,9 +767,10 @@ function planTiles(){
   const steps = Math.max(150, Math.ceil(S.duration * 45));
   const maxZ = maxZoom();
   for (let i = 0; i <= steps; i++){
-    const u = EASINGS[S.ease](i / steps);
+    const t = i / steps;
+    const u = EASINGS[S.ease](t);
     const s = spanAt(u), th = thetaAt(u);
-    for (const lv of levelsAt(s, maxZ)){
+    for (const lv of levelsAt(s, maxZ, sharpAt(t))){
       const k = layerAt(lv.z);
       const r = rangeAt(lv.z, s, th);
       for (let x = r.x0; x <= r.x1; x++)
@@ -580,6 +786,23 @@ function planTiles(){
 /* =======================================================================
    7. Rendu d'une image
    ======================================================================= */
+// tuile demandée, ou à défaut le quartier correspondant d'une tuile parente.
+// Une tuile absente n'ouvre ainsi jamais un trou sur le fond.
+function resolveTile(k, z, x, y){
+  const t = tiles.get(tkey(k, z, x, y));
+  if (t && !t.failed) return { tex:t.tex, ox:0, oy:0, sc:1 };
+  const alt = k === "ortho" ? "plan" : "ortho";
+  for (let d = 1; d <= 5 && z - d >= 0; d++){
+    const pz = z - d, px = x >> d, py = y >> d;
+    const p = tiles.get(tkey(k, pz, px, py)) || tiles.get(tkey(alt, pz, px, py));
+    if (p && !p.failed){
+      const sc = 1 / (1 << d);
+      return { tex:p.tex, ox:(x - (px << d)) * sc, oy:(y - (py << d)) * sc, sc };
+    }
+  }
+  return null;
+}
+
 function drawLevel(z, s, theta, alpha){
   const k = layerAt(z);
   const r = rangeAt(z, s, theta);
@@ -587,27 +810,35 @@ function drawLevel(z, s, theta, alpha){
   gl.uniform1f(U.alpha, alpha);
   for (let x = r.x0; x <= r.x1; x++){
     for (let y = r.y0; y <= r.y1; y++){
-      const t = tiles.get(tkey(k, z, x, y));
-      if (!t || t.failed) continue;
+      const src = resolveTile(k, z, x, y);
+      if (!src) continue;
       // conversion en coordonnées écran faite en double précision côté JS
       const ax = ((x * r.size) - S.mx) / halfX;
       const bx = (((x + 1) * r.size) - S.mx) / halfX;
       const ay = -((( y      * r.size) - S.my) / halfY);   // haut
       const by = -(((y + 1) * r.size) - S.my) / halfY;     // bas
       gl.uniform4f(U.rect, ax, by, bx - ax, ay - by);
-      gl.bindTexture(gl.TEXTURE_2D, t.tex);
+      gl.uniform4f(U.uv, src.ox, src.oy, src.sc, src.sc);
+      gl.bindTexture(gl.TEXTURE_2D, src.tex);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
   }
 }
 
-function renderGL(s, theta){
+function renderGL(s, theta, target, sharp){
+  view.cx = S.mx; view.cy = S.my; view.span = s; view.theta = theta;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, target || null);
+  gl.useProgram(prog);
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+  gl.enable(gl.BLEND);
   gl.viewport(0, 0, S.W, S.H);
   gl.clearColor(0.055, 0.086, 0.075, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
   gl.uniform2f(U.rot, Math.cos(theta), Math.sin(theta));
   gl.uniform1f(U.aspect, S.W / S.H);
-  for (const lv of levelsAt(s, S.effMaxZ)) drawLevel(lv.z, s, theta, lv.alpha);
+  for (const lv of levelsAt(s, S.effMaxZ, sharp)) drawLevel(lv.z, s, theta, lv.alpha);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
 
 /* =======================================================================
@@ -632,6 +863,7 @@ function drawOverlay(s, t, time){
     g.addColorStop(1, "rgba(0,0,0,0.46)");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+    dither();   // un dégradé sombre et lisse est ce qui bande le plus à l'encodage
   }
 
   const appear = smoothstep(0.68, 0.95, t);
@@ -750,12 +982,35 @@ function drawOverlay(s, t, time){
 }
 
 let opt = { cMark:true, cTitle:true, cScale:true, cVig:true, title:"" };
+
+// grain très faible : casse les paliers du vignettage, que VP9 transformerait
+// sinon en bandes visibles dans les coins sombres.
+let noisePat = null;
+function dither(){
+  if (!noisePat){
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const x = c.getContext("2d"), d = x.createImageData(64, 64);
+    for (let i = 0; i < d.data.length; i += 4){
+      const v = (Math.random() * 255) | 0;
+      d.data[i] = d.data[i+1] = d.data[i+2] = v; d.data[i+3] = 255;
+    }
+    x.putImageData(d, 0, 0);
+    noisePat = ctx.createPattern(c, "repeat");
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = "overlay";
+  ctx.globalAlpha = 0.03;
+  ctx.fillStyle = noisePat;
+  ctx.fillRect(0, 0, S.W, S.H);
+  ctx.restore();
+}
 const logo = { img:null };   // logo chargé localement, donc sans incidence sur l'export
 
 function frame(t, time){
   const u = EASINGS[S.ease](t);
   const s = spanAt(u), th = thetaAt(u);
-  renderGL(s, th);
+  renderGL(s, th, null, sharpAt(t));
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, S.W, S.H);
   ctx.drawImage(glCanvas, 0, 0);
@@ -871,6 +1126,8 @@ function readSettings(){
   S.rot = clamp(parseFloat(el("rot").value) || 0, 0, 40);
   S.mode = el("mode").value;
   S.tileTarget = parseInt(el("qual").value, 10);
+  S.fps = parseInt(el("fps").value, 10);
+  S.vq = el("vq").value;
   const [w, h] = el("res").value.split("x").map(Number);
   S.W = w; S.H = h;
   opt = {
@@ -889,6 +1146,7 @@ function readSettings(){
 }
 
 function setTarget(lat, lon, label){
+  S.forceLayer = null;
   S.lat = lat; S.lon = lon; S.label = label;
   const m = lonLatToMerc(lon, lat);
   S.mx = m[0]; S.my = m[1];
@@ -941,20 +1199,53 @@ function computeEffectiveMaxZ(){
   return best || nominal;
 }
 
+// un niveau dont la photo aérienne répond majoritairement 404 n'est pas couvert :
+// on le rebascule sur le plan IGN plutôt que de laisser un trou.
+function rescueLevels(list){
+  const stat = new Map();
+  for (const t of list){
+    if (t.k !== "ortho" || levelLayer.has(t.z)) continue;
+    const e = stat.get(t.z) || { ok:0, bad:0 };
+    (tiles.get(tkey(t.k, t.z, t.x, t.y)) || {}).failed ? e.bad++ : e.ok++;
+    stat.set(t.z, e);
+  }
+  const moved = [];
+  for (const [z, e] of stat){
+    if (e.bad && e.bad / (e.ok + e.bad) > 0.5){ levelLayer.set(z, "plan"); moved.push(z); }
+  }
+  return moved;
+}
+
 async function prepare(){
   if (S.ready) return true;
-  const list = planTiles();
-  if (list.length === 0){ S.effMaxZ = computeEffectiveMaxZ(); S.ready = true; return true; }
-  say("Chargement des tuiles IGN : 0 / " + list.length);
-  progress(0);
-  loader.show("Chargement des tuiles IGN", list.length + " tuiles à récupérer");
-  await loadMany(list, (d, n) => {
-    progress(d / n);
-    loader.set(d / n, d + " / " + n + " tuiles");
-    if (d % 8 === 0 || d === n) say("Chargement des tuiles IGN : " + d + " / " + n);
-  });
-  loader.set(1, "Prêt");
+  let lastList = [], moved = [];
+
+  // deux passes au plus : la seconde ne sert qu'à rattraper les niveaux rebasculés
+  for (let pass = 0; pass < 2; pass++){
+    const list = planTiles();
+    if (!list.length) break;
+    lastList = list;
+    const titre = pass === 0 ? "Chargement des tuiles IGN" : "Complément sur le plan IGN";
+    say(titre + " : 0 / " + list.length);
+    progress(0);
+    loader.show(titre, list.length + " tuiles à récupérer");
+    await loadMany(list, (d, n) => {
+      progress(d / n);
+      loader.set(d / n, d + " / " + n + " tuiles");
+      if (d % 8 === 0 || d === n) say(titre + " : " + d + " / " + n);
+    });
+    moved = rescueLevels(list);
+    if (!moved.length) break;
+  }
+
   loader.hide();
+  const lost = lastList.filter(t => (tiles.get(tkey(t.k, t.z, t.x, t.y)) || {}).failed).length;
+  const notes = [];
+  if (moved.length) notes.push("niveaux " + moved.sort((a,b) => a-b).join(", ")
+                               + " sans photo aérienne, repris sur le plan IGN");
+  if (lost) notes.push(lost + " tuile" + (lost > 1 ? "s" : "") + " remplacée par sa parente");
+  if (notes.length) say(notes.join(" — ") + ".");
+
   S.effMaxZ = computeEffectiveMaxZ();
   progress(1);
   S.ready = true;
@@ -977,7 +1268,10 @@ el("play").addEventListener("click", async () => {
     await prepare();
     say("Lecture…");
     await runAnimation();
-    say("Terminé. Ajustez les réglages ou passez à l'enregistrement.");
+    const zEnd = levelsAt(S.s1, S.effMaxZ, 1).slice(-1)[0].z;
+    const pxTile = 256 * Math.pow(2, Math.log2(S.W / (256 * S.s1)) - zEnd);
+    say("Terminé. Image finale au niveau IGN " + zEnd
+        + " (" + Math.round(pxTile) + " px par tuile).");
   }catch(e){
     say("Échec du chargement : " + e.message, true);
   }finally{ loader.hide(); lockUI(false); progress(0); }
@@ -985,9 +1279,96 @@ el("play").addEventListener("click", async () => {
 
 /* --- enregistrement --- */
 function pickMime(){
-  const c = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4;codecs=avc1", "video/mp4"];
+  // VP9 d'abord : à débit égal il tient bien mieux le détail fin que VP8 ou H.264
+  const c = ["video/webm;codecs=vp09.00.10.08", "video/webm;codecs=vp9",
+             "video/webm;codecs=vp8", "video/webm",
+             "video/mp4;codecs=avc1.640028", "video/mp4"];
   for (const m of c) if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
   return "";
+}
+
+// débit calculé à partir du format et de la cadence, pas une valeur fixe.
+// Un zoom plein cadre n'offre aucune zone statique à l'encodeur : il lui faut
+// beaucoup plus de bits par pixel qu'une scène ordinaire.
+const BPP = { standard:0.16, haute:0.35, max:0.65 };
+function videoBitrate(){
+  return Math.round(S.W * S.H * S.fps * (BPP[S.vq] || 0.35));
+}
+
+/* --- export en suite d'images PNG : sans perte, pour un master de montage --- */
+const CRC_T = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++){
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(buf){
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = CRC_T[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+// archive ZIP sans compression : les PNG sont déjà compressés, et le mode
+// « stocké » évite d'avoir à embarquer un compresseur.
+function zipStore(entries){
+  const enc = new TextEncoder();
+  const body = [], central = [];
+  let offset = 0, centralSize = 0;
+  for (const e of entries){
+    const name = enc.encode(e.name);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true);
+    lh.setUint32(14, e.crc, true);
+    lh.setUint32(18, e.size, true); lh.setUint32(22, e.size, true);
+    lh.setUint16(26, name.length, true);
+    body.push(new Uint8Array(lh.buffer), name, e.blob);
+
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true);
+    ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+    ch.setUint32(16, e.crc, true);
+    ch.setUint32(20, e.size, true); ch.setUint32(24, e.size, true);
+    ch.setUint16(28, name.length, true);
+    ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    centralSize += 46 + name.length;
+    offset += 30 + name.length + e.size;
+  }
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+  end.setUint32(12, centralSize, true); end.setUint32(16, offset, true);
+  return new Blob(body.concat(central, [new Uint8Array(end.buffer)]), { type:"application/zip" });
+}
+
+async function exportFrames(slug){
+  const total = S.hold0 + S.duration + S.hold1;
+  const n = Math.round(total * S.fps);
+  const entries = [];
+  loader.show("Rendu des images", n + " images en " + S.W + " × " + S.H);
+  for (let i = 0; i < n; i++){
+    const time = i / S.fps;
+    let t;
+    if (time < S.hold0) t = 0;
+    else if (time < S.hold0 + S.duration) t = (time - S.hold0) / S.duration;
+    else t = 1;
+    frame(clamp(t, 0, 1), time);
+    const blob = await new Promise(r => out.toBlob(r, "image/png"));
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    entries.push({
+      name: slug + "/" + String(i + 1).padStart(5, "0") + ".png",
+      blob, size: buf.length, crc: crc32(buf)
+    });
+    loader.set((i + 1) / n, (i + 1) + " / " + n + " images");
+  }
+  loader.show("Assemblage de l'archive", "");
+  loader.set(1, "");
+  const zip = zipStore(entries);
+  loader.hide();
+  return zip;
 }
 
 el("rec").addEventListener("click", async () => {
@@ -1000,10 +1381,27 @@ el("rec").addEventListener("click", async () => {
   try{
     await document.fonts.ready;
     await prepare();
+    const slug = (S.label || "point").toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "ign";
+
+    // suite d'images : rendu déterministe, aucune perte, aucune contrainte de temps réel
+    if (S.vq === "png"){
+      const zip = await exportFrames("azimut-" + slug);
+      const url = URL.createObjectURL(zip);
+      const a = document.createElement("a");
+      a.href = url; a.download = "azimut-" + slug + "-png.zip"; a.click();
+      say(Math.round(zip.size / 1048576) + " Mo d'images PNG, à importer comme "
+          + "suite d'images à " + S.fps + " i/s. "
+          + "<a href='" + url + "' download='" + a.download + "'>Retélécharger</a>");
+      return;
+    }
+
     const mime = pickMime();
-    const stream = out.captureStream(60);
+    const stream = out.captureStream(S.fps);
     const chunks = [];
-    const mr = new MediaRecorder(stream, mime ? { mimeType:mime, videoBitsPerSecond: 28000000 } : undefined);
+    const mr = new MediaRecorder(stream, mime
+      ? { mimeType:mime, videoBitsPerSecond: videoBitrate() } : undefined);
     mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
     const done = new Promise(r => { mr.onstop = r; });
 
@@ -1020,15 +1418,13 @@ el("rec").addEventListener("click", async () => {
     const type = mime || "video/webm";
     const blob = new Blob(chunks, { type });
     const ext = type.includes("mp4") ? "mp4" : "webm";
-    const slug = (S.label || "point").toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = "zoom-" + (slug || "ign") + "." + ext;
     a.click();
     const mo = (blob.size / 1048576).toFixed(1);
-    say("Vidéo enregistrée (" + mo + " Mo). <a href='" + url + "' download='" + a.download + "'>Retélécharger</a>");
+    say("Vidéo enregistrée : " + mo + " Mo, " + Math.round(videoBitrate() / 1e6) + " Mb/s à "
+        + S.fps + " i/s. <a href='" + url + "' download='" + a.download + "'>Retélécharger</a>");
   }catch(e){
     el("recdot").classList.remove("on");
     say("L'enregistrement a échoué : " + e.message, true);
@@ -1078,14 +1474,111 @@ for (const b of document.querySelectorAll(".chips button")){
 
 /* --- réglages : redessine l'aperçu --- */
 let previewTimer = null;
-for (const id of ["dur","ease","w0","w1","hold0","hold1","rot","mode","res","qual","title","cMark","cTitle","cScale","cVig"]){
+for (const id of ["dur","ease","w0","w1","hold0","hold1","rot","mode","res","qual","fps","vq","title","cMark","cTitle","cScale","cVig"]){
   el(id).addEventListener("change", () => {
     readSettings();
-    if (S.lat === null) return;
     clearTimeout(previewTimer);
-    previewTimer = setTimeout(preview, 120);
+    previewTimer = setTimeout(S.lat === null ? homeView : preview, 120);
   });
 }
+
+/* --- ecran d'accueil : la France, en attendant un point vise --- */
+async function homeView(){
+  const m = lonLatToMerc(HOME.lon, HOME.lat);
+  S.mx = m[0]; S.my = m[1];
+  S.forceLayer = "plan";                 // le plan couvre le monde aux petits zooms
+  S.effMaxZ = LAYERS.plan.maxZ;
+  const s = groundToSpan(HOME.km * 1000, HOME.lat);
+
+  const list = [];
+  for (const lv of levelsAt(s, LAYERS.plan.maxZ)){
+    const r = rangeAt(lv.z, s, 0);
+    for (let x = r.x0; x <= r.x1; x++)
+      for (let y = r.y0; y <= r.y1; y++)
+        if (!tiles.has(tkey("plan", lv.z, x, y))) list.push({ k:"plan", z:lv.z, x, y });
+  }
+  if (list.length) loader.show("Chargement de la carte", list.length + " tuiles IGN");
+  await loadMany(list, (d, n) => loader.set(d / n, d + " / " + n + " tuiles"));
+  loader.hide();
+
+  // composition finale, identique avec ou sans animation d'ouverture
+  const settle = () => {
+    renderGL(s, 0);
+    compositeHome();
+    say("Cliquez sur la carte pour viser un point.");
+  };
+
+  const calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (calm || S.introDone){ settle(); return; }
+
+  // révélation : la carte arrive par un balayage d'azimut depuis le centre
+  S.introDone = true;
+  S.introStop = false;
+  const target = sceneTarget();
+  renderGL(s, 0, target.fbo);
+  say("");
+
+  await new Promise(done => {
+    const t0 = performance.now(), DUR = 2000;
+    (function step(now){
+      const t = clamp((now - t0) / DUR, 0, 1);
+      if (S.introStop || t >= 1){ done(); return; }
+      drawReveal(target.tex, 1 - Math.pow(1 - t, 3));   // départ vif, fin posée
+      compositeHome();
+      requestAnimationFrame(step);
+    })(performance.now());
+  });
+  settle();
+}
+
+// carte d'accueil vers le canvas visible, avec son vignettage
+function compositeHome(){
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, S.W, S.H);
+  ctx.drawImage(glCanvas, 0, 0);
+  const g = ctx.createRadialGradient(S.W/2, S.H/2, Math.min(S.W,S.H)*0.30,
+                                     S.W/2, S.H/2, Math.max(S.W,S.H)*0.72);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(0,0,0,0.5)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, S.W, S.H);
+}
+
+/* --- clic sur la carte : pixel vers longitude et latitude --- */
+async function reverseLabel(lon, lat){
+  try{
+    const r = await fetch("https://data.geopf.fr/geocodage/reverse?index=address&limit=1"
+                          + "&lon=" + lon.toFixed(6) + "&lat=" + lat.toFixed(6));
+    const j = await r.json();
+    const f = j.features && j.features[0];
+    if (f && f.properties && f.properties.label) return f.properties.label;
+  }catch(e){ /* sans importance : on retombe sur les coordonnees */ }
+  return null;
+}
+
+out.addEventListener("click", async e => {
+  S.introStop = true;
+  if (S.busy) return;
+  const r = out.getBoundingClientRect();
+  const nx = ((e.clientX - r.left) / r.width) * 2 - 1;
+  const ny = 1 - ((e.clientY - r.top) / r.height) * 2;
+
+  // on annule la rotation appliquee par le shader
+  const a = S.W / S.H, th = -view.theta;
+  const qx = nx * a, qy = ny;
+  const rx = qx * Math.cos(th) - qy * Math.sin(th);
+  const ry = qx * Math.sin(th) + qy * Math.cos(th);
+
+  const mx = view.cx + (rx / a) * view.span / 2;
+  const my = view.cy - ry * (view.span * S.H / S.W) / 2;
+  if (mx < 0 || mx > 1 || my < 0 || my > 1) return;
+
+  const lon = mx * 360 - 180;
+  const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * my))) / D2R;
+
+  say("Localisation du point…");
+  const label = await reverseLabel(lon, lat);
+  setTarget(lat, lon, label || (lat.toFixed(5) + ", " + lon.toFixed(5)));
+});
 
 /* --- logo IGN incrusté, livré avec le dépôt --- */
 (function loadIgnLogo(){
@@ -1107,11 +1600,17 @@ for (const id of ["dur","ease","w0","w1","hold0","hold1","rot","mode","res","qua
     }
     if (S.lat !== null) frame(0, 0);
   };
-  img.onerror = () => { /* absent : le bloc IGN dessiné prend le relais */ };
+  img.onerror = () => {
+    // absent : le bloc IGN dessiné prend le relais dans la vidéo,
+    // et la marque disparaît de l'en-tête plutôt que d'afficher une image cassée.
+    const b = document.getElementById("brandIgn");
+    if (b) b.remove();
+  };
   img.src = IGN_LOGO_URL;
 })();
 
 readSettings();
+homeView();
 </script>
 </body>
 </html>

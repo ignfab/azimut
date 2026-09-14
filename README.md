@@ -8,15 +8,44 @@ Ouvrez le fichier dans un navigateur, ou servez-le en statique.
 
 ## Utilisation
 
-1. Saisissez une adresse, un lieu-dit, ou des coordonnées `48.8584, 2.2945`.
+À l'ouverture, la carte de France s'affiche. Cliquez dessus pour viser un point :
+Azimut interroge le géocodage inverse pour en retrouver le nom.
+
+1. Cliquez sur la carte, ou saisissez une adresse, un lieu-dit, ou `48.8584, 2.2945`.
 2. Réglez la durée, le cadre de départ et d'arrivée, le rythme.
 3. **Lancer l'animation** précharge les tuiles puis joue le plan.
 4. **Enregistrer la vidéo** rejoue le plan et télécharge un WebM.
 
-Le WebM se convertit en master de montage avec :
+## Export
+
+| Qualité | Débit en 1080p25 | Usage |
+|---|---|---|
+| Standard | ~8 Mb/s | diffusion web, repérage |
+| Haute | ~18 Mb/s | montage courant |
+| Maximale | ~34 Mb/s | plan large ou très détaillé |
+| Images PNG | sans perte | master de diffusion |
+
+Le débit est calculé à partir du format et de la cadence : un zoom plein cadre
+n'offre aucune zone statique à l'encodeur, il lui faut bien plus de bits par pixel
+qu'une scène ordinaire.
+
+La cadence par défaut est 25 i/s, celle de la diffusion française. Elle compte
+double : à débit égal, 25 i/s laisse deux fois plus de bits par image que 50,
+et laisse à l'encodeur VP9 deux fois plus de temps, celui-ci travaillant en
+temps réel dans `MediaRecorder`.
+
+Pour un master sans aucune perte, choisissez « Images PNG » : le rendu devient
+déterministe, image par image, sans contrainte de temps réel. L'archive s'importe
+comme suite d'images dans n'importe quel logiciel de montage, ou se convertit :
 
 ```
-ffmpeg -i zoom-mont-saint-michel.webm -c:v prores_ks -profile:v 3 plan.mov
+ffmpeg -framerate 25 -i %05d.png -c:v prores_ks -profile:v 3 plan.mov
+```
+
+Pour convertir un WebM :
+
+```
+ffmpeg -i azimut-mont-saint-michel.webm -c:v prores_ks -profile:v 3 plan.mov
 ```
 
 ## Données
@@ -43,6 +72,21 @@ Le rendu est un pipeline WebGL de tuiles Web Mercator.
 - **Fondu entre niveaux.** Le niveau courant est dessiné opaque, le niveau suivant
   en fondu par-dessus. Le passage d'un niveau à l'autre est une opération neutre,
   ce qui rend le changement de résolution invisible.
+- **Netteté à l'arrivée.** Sur les derniers 14 % du mouvement, le niveau affiché
+  devient celui dont la résolution native est la plus proche de celle de l'écran,
+  et non celui que dicte le réglage de finesse. Les tuiles concernées sont presque
+  toujours déjà chargées, donc le gain est gratuit.
+- **Chargement borné.** Chaque tuile est demandée par `fetch`, avec abandon à 5 s
+  et deux nouvelles tentatives. Un code 4xx n'est jamais retenté : la donnée
+  n'existe pas là, insister coûte trois requêtes pour rien. Huit requêtes en
+  parallèle, au-delà HTTP/2 commence à réinitialiser des flux.
+- **Couverture détectée, pas supposée.** Si la photo aérienne répond
+  majoritairement 404 sur un niveau, ce niveau est rebasculé sur le plan IGN et
+  rechargé. La bascule est constatée à l'exécution, donc elle suit l'évolution
+  des pyramides IGN sans qu'on ait à coder une limite en dur.
+- **Tolérance aux trous.** Une tuile qui n'a pas répondu est retentée deux fois,
+  puis remplacée à l'affichage par le quartier correspondant de sa tuile parente.
+  Un échec réseau se traduit par une zone légèrement floue, jamais par un carré vide.
 - **Précision.** La conversion mercator vers coordonnées écran se fait en double
   précision côté JS ; seul le rectangle NDC est transmis au GPU. En float32 dans le
   shader, l'image se mettrait à cranter au-delà du zoom 15.
@@ -86,3 +130,13 @@ Pour un fichier unique distribuable, qui fonctionne même en double-clic :
 ```
 python tools/embed-logo.py      # ecrit azimut-autonome.html
 ```
+
+## Polices
+
+L'interface utilise **Public Sans** (SIL Open Font License), la police du US Web
+Design System : même squelette dérivé du Franklin Gothic que Marianne, proportions
+étroites et grande hauteur d'x, sans restriction d'usage.
+
+Marianne est volontairement écartée : sa licence réserve son emploi à la
+communication de l'État. Le mot « Azimut » du logo est en Barlow Condensed,
+déjà vectorisé dans les SVG livrés, donc sans dépendance au chargement d'une police.
