@@ -131,6 +131,18 @@ button.ghost:hover:not(:disabled){background:rgba(106,106,244,.14);color:var(--h
 .check input:checked::after{transform:translateX(20px);
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236a6af4' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'><polyline points='4,13 9,18 20,6'/></svg>")}
 
+/* ---------- selecteur de mode ---------- */
+.seg{display:grid;grid-template-columns:1fr 1fr;margin-bottom:18px}
+.seg button{background:transparent;border:1px solid var(--line);color:var(--paper-dim);
+  font-size:14px;padding:9px 6px;font-weight:400}
+.seg button + button{border-left:0}
+.seg button.on{background:var(--hydro);border-color:var(--hydro);color:#fff;font-weight:500}
+.seg button:hover:not(.on){background:var(--panel-2);color:var(--paper)}
+
+.pt{border-left:3px solid transparent;padding-left:0;transition:padding-left .12s}
+.pt.active{border-left-color:var(--hydro);padding-left:12px}
+#ptB{margin-top:18px}
+
 /* ---------- accordeons ---------- */
 .fold{padding:0}
 .fold > summary{list-style:none;cursor:pointer;padding:17px 0;
@@ -232,9 +244,13 @@ button.ghost:hover:not(:disabled){background:rgba(106,106,244,.14);color:var(--h
     <div class="body">
 
       <section class="group">
-        <h2>Point visé</h2>
-        <div class="field">
-          <label for="q">Adresse, lieu-dit, ou latitude et longitude</label>
+        <div class="seg" role="group" aria-label="Type de mouvement">
+          <button type="button" id="segOne" class="on" aria-pressed="true">Un point</button>
+          <button type="button" id="segTrip" aria-pressed="false">D'un point à l'autre</button>
+        </div>
+
+        <div class="pt" id="ptA">
+          <label for="q" id="labA">Adresse, lieu-dit, ou latitude et longitude</label>
           <div class="searchbar">
             <input type="text" id="q" placeholder="12 rue de Rivoli, Paris — ou 48.8584, 2.2945" autocomplete="off">
             <button id="find">Chercher</button>
@@ -249,6 +265,18 @@ button.ghost:hover:not(:disabled){background:rgba(106,106,244,.14);color:var(--h
           </div>
           <div id="target" hidden><b id="tlabel"></b><span id="tcoord"></span></div>
         </div>
+
+        <div class="pt" id="ptB" hidden>
+          <label for="qB">Arrivée</label>
+          <div class="searchbar">
+            <input type="text" id="qB" placeholder="Ville, adresse, ou coordonnées" autocomplete="off">
+            <button id="findB">Chercher</button>
+          </div>
+          <ul id="resultsB"></ul>
+          <div id="targetB" hidden><b id="tlabelB"></b><span id="tcoordB"></span></div>
+        </div>
+
+        <p class="hint" id="pickHint" hidden>Un clic sur la carte renseigne le point encadré.</p>
       </section>
 
       <details class="group fold">
@@ -263,6 +291,7 @@ button.ghost:hover:not(:disabled){background:rgba(106,106,244,.14);color:var(--h
             <label for="ease">Rythme</label>
             <select id="ease">
               <option value="cinema" selected>Départ et arrivée doux</option>
+              <option value="survol">Survol régulier — pour les trajets</option>
               <option value="douce">Très progressif</option>
               <option value="plongee">Accélération continue</option>
               <option value="pose">Arrivée en douceur</option>
@@ -453,6 +482,8 @@ function tileURL(key, z, x, y){
    ======================================================================= */
 const S = {
   lat:null, lon:null, label:"", mx:0, my:0,
+  latB:null, lonB:null, labelB:"", mxB:0, myB:0,
+  trip:false, pick:"A", fly:null,
   W:1920, H:1080,
   duration:11, hold0:1, hold1:2, ease:"cinema",
   w0:1400000, w1:300,
@@ -469,8 +500,27 @@ const view = { cx:0, cy:0, span:1, theta:0 };
 // cadrage de l'ecran d'accueil : la France entiere
 const HOME = { lon:2.45, lat:46.6, km:1600 };
 
+/* Part du temps consacrée à chaque rampe d'accélération, pour le rythme
+   « survol ». Entre les deux rampes, la vitesse est constante.
+   0.22 donne une pointe à 1,28 fois la vitesse moyenne. Montez vers 0.35 pour
+   un démarrage plus moelleux mais une traversée plus rapide ; descendez vers
+   0.10 pour une traversée encore plus posée, au prix d'un départ plus sec. */
+const EASE_ENDS = 0.22;
+
+// rampes douces aux deux bouts, vitesse constante entre les deux
+function easeEnds(t){
+  const e = EASE_ENDS;
+  if (e <= 0.001) return t;
+  const v = 1 / (1 - e);                       // plateau tel que le total fasse 1
+  const ramp = a => v * e * (a*a*a - a*a*a*a / 2);
+  if (t < e)     return ramp(t / e);
+  if (t > 1 - e) return 1 - ramp((1 - t) / e);
+  return v * e / 2 + v * (t - e);
+}
+
 const EASINGS = {
   lineaire: t => t,
+  survol: easeEnds,
   cinema:   t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2,
   douce:    t => t*t*t*(t*(t*6 - 15) + 10),
   plongee:  t => t*t,
@@ -747,22 +797,83 @@ function levelsAt(s, maxZ, sharp){
 }
 
 // emprise visible en tuiles, boîte englobante après rotation
-function rangeAt(z, s, theta){
+function rangeAt(z, cam){
   const n = 1 << z, size = 1 / n;
-  const hw = s / 2, hh = (s * S.H / S.W) / 2;
-  const c = Math.abs(Math.cos(theta)), si = Math.abs(Math.sin(theta));
+  const hw = cam.span / 2, hh = (cam.span * S.H / S.W) / 2;
+  const c = Math.abs(Math.cos(cam.theta)), si = Math.abs(Math.sin(cam.theta));
   const ehw = hw * c + hh * si, ehh = hw * si + hh * c;
   return {
-    x0: clamp(Math.floor((S.mx - ehw) / size), 0, n - 1),
-    x1: clamp(Math.floor((S.mx + ehw) / size), 0, n - 1),
-    y0: clamp(Math.floor((S.my - ehh) / size), 0, n - 1),
-    y1: clamp(Math.floor((S.my + ehh) / size), 0, n - 1),
+    x0: clamp(Math.floor((cam.cx - ehw) / size), 0, n - 1),
+    x1: clamp(Math.floor((cam.cx + ehw) / size), 0, n - 1),
+    y0: clamp(Math.floor((cam.cy - ehh) / size), 0, n - 1),
+    y1: clamp(Math.floor((cam.cy + ehh) / size), 0, n - 1),
     size, n
   };
 }
 
 const spanAt = u => S.s0 * Math.pow(S.s1 / S.s0, u);
 const thetaAt = u => (1 - u) * S.rot * D2R;
+
+/* ---------------------------------------------------------------------
+   Trajet d'un point à l'autre.
+
+   Chemin de van Wijk et Nuij (2003) : l'unique trajectoire où la vitesse
+   perçue reste constante. Sans elle, le déplacement au sommet de l'arc
+   paraît glisser trop vite, et la descente traîne.
+
+   La largeur au sommet vaut w0·cosh(r0), ce qui s'inverse : le réglage
+   « cadre de départ » fixe directement l'altitude du survol, et ρ s'en déduit.
+   --------------------------------------------------------------------- */
+function buildFly(){
+  S.fly = null;
+  if (!S.trip || S.lat === null || S.latB === null) return;
+
+  const u1 = Math.hypot(S.mxB - S.mx, S.myB - S.my);
+  const w0 = groundToSpan(S.w1, S.lat);
+  const w1 = groundToSpan(S.w1, S.latB);
+  if (!(u1 > 1e-9)) return;                       // deux points confondus
+
+  let apex = groundToSpan(S.w0, (S.lat + S.latB) / 2);
+  apex = Math.max(apex, Math.max(w0, w1) * 1.25);
+
+  const bWanted = Math.sqrt(Math.max(apex * apex / (w0 * w0) - 1, 1e-12));
+  const rho = clamp(Math.sqrt(2 * w0 * bWanted / u1), 0.7, 3.0);
+
+  const r2 = rho * rho, r4 = r2 * r2;
+  const b0 = (w1*w1 - w0*w0 + r4 * u1 * u1) / (2 * w0 * r2 * u1);
+  const b1 = (w1*w1 - w0*w0 - r4 * u1 * u1) / (2 * w1 * r2 * u1);
+  const r0 = Math.log(-b0 + Math.sqrt(b0 * b0 + 1));
+  const r1 = Math.log(-b1 + Math.sqrt(b1 * b1 + 1));
+  const len = (r1 - r0) / rho;
+  if (!isFinite(len) || len <= 0) return;
+
+  S.fly = { u1, w0, rho, r0, len,
+            ch0: Math.cosh(r0), sh0: Math.sinh(r0),
+            apex: w0 * Math.cosh(r0) };
+}
+
+function flyAt(u){
+  const f = S.fly;
+  const a = f.rho * (u * f.len) + f.r0;
+  const w = f.w0 * f.ch0 / Math.cosh(a);
+  const d = f.w0 * (f.ch0 * Math.tanh(a) - f.sh0) / (f.rho * f.rho);
+  const k = d / f.u1;
+  return { cx: S.mx + (S.mxB - S.mx) * k, cy: S.my + (S.myB - S.my) * k, span: w };
+}
+
+// état de la caméra à l'instant normalisé t
+function cameraAt(t){
+  const u = EASINGS[S.ease](t);
+  const theta = thetaAt(u);
+  if (S.trip && S.fly){
+    const p = flyAt(u);
+    return { cx:p.cx, cy:p.cy, span:p.span, theta };
+  }
+  return { cx:S.mx, cy:S.my, span:spanAt(u), theta };
+}
+
+const finalSpan = () => (S.trip && S.fly) ? groundToSpan(S.w1, S.latB) : S.s1;
+const latFromMerc = my => Math.atan(Math.sinh(Math.PI * (1 - 2 * my))) / D2R;
 
 // ensemble complet des tuiles nécessaires à l'animation
 function planTiles(){
@@ -771,11 +882,10 @@ function planTiles(){
   const maxZ = maxZoom();
   for (let i = 0; i <= steps; i++){
     const t = i / steps;
-    const u = EASINGS[S.ease](t);
-    const s = spanAt(u), th = thetaAt(u);
-    for (const lv of levelsAt(s, maxZ, sharpAt(t))){
+    const cam = cameraAt(t);
+    for (const lv of levelsAt(cam.span, maxZ, sharpAt(t))){
       const k = layerAt(lv.z);
-      const r = rangeAt(lv.z, s, th);
+      const r = rangeAt(lv.z, cam);
       for (let x = r.x0; x <= r.x1; x++)
         for (let y = r.y0; y <= r.y1; y++){
           const key = tkey(k, lv.z, x, y);
@@ -806,20 +916,20 @@ function resolveTile(k, z, x, y){
   return null;
 }
 
-function drawLevel(z, s, theta, alpha){
+function drawLevel(z, cam, alpha){
   const k = layerAt(z);
-  const r = rangeAt(z, s, theta);
-  const halfX = s / 2, halfY = (s * S.H / S.W) / 2;
+  const r = rangeAt(z, cam);
+  const halfX = cam.span / 2, halfY = (cam.span * S.H / S.W) / 2;
   gl.uniform1f(U.alpha, alpha);
   for (let x = r.x0; x <= r.x1; x++){
     for (let y = r.y0; y <= r.y1; y++){
       const src = resolveTile(k, z, x, y);
       if (!src) continue;
       // conversion en coordonnées écran faite en double précision côté JS
-      const ax = ((x * r.size) - S.mx) / halfX;
-      const bx = (((x + 1) * r.size) - S.mx) / halfX;
-      const ay = -((( y      * r.size) - S.my) / halfY);   // haut
-      const by = -(((y + 1) * r.size) - S.my) / halfY;     // bas
+      const ax = ((x * r.size) - cam.cx) / halfX;
+      const bx = (((x + 1) * r.size) - cam.cx) / halfX;
+      const ay = -((( y      * r.size) - cam.cy) / halfY);   // haut
+      const by = -(((y + 1) * r.size) - cam.cy) / halfY;     // bas
       gl.uniform4f(U.rect, ax, by, bx - ax, ay - by);
       gl.uniform4f(U.uv, src.ox, src.oy, src.sc, src.sc);
       gl.bindTexture(gl.TEXTURE_2D, src.tex);
@@ -828,8 +938,8 @@ function drawLevel(z, s, theta, alpha){
   }
 }
 
-function renderGL(s, theta, target, sharp){
-  view.cx = S.mx; view.cy = S.my; view.span = s; view.theta = theta;
+function renderGL(cam, target, sharp){
+  view.cx = cam.cx; view.cy = cam.cy; view.span = cam.span; view.theta = cam.theta;
   gl.bindFramebuffer(gl.FRAMEBUFFER, target || null);
   gl.useProgram(prog);
   gl.enableVertexAttribArray(aPos);
@@ -838,9 +948,9 @@ function renderGL(s, theta, target, sharp){
   gl.viewport(0, 0, S.W, S.H);
   gl.clearColor(0.055, 0.086, 0.075, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
-  gl.uniform2f(U.rot, Math.cos(theta), Math.sin(theta));
+  gl.uniform2f(U.rot, Math.cos(cam.theta), Math.sin(cam.theta));
   gl.uniform1f(U.aspect, S.W / S.H);
-  for (const lv of levelsAt(s, S.effMaxZ, sharp)) drawLevel(lv.z, s, theta, lv.alpha);
+  for (const lv of levelsAt(cam.span, S.effMaxZ, sharp)) drawLevel(lv.z, cam, lv.alpha);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
 
@@ -857,7 +967,7 @@ function niceRound(max){
   return best;
 }
 
-function drawOverlay(s, t, time){
+function drawOverlay(cam, t, time){
   const W = S.W, H = S.H, k = H / 720;   // facteur d'échelle typographique
 
   if (opt.cVig){
@@ -869,108 +979,19 @@ function drawOverlay(s, t, time){
     dither();   // un dégradé sombre et lisse est ce qui bande le plus à l'encodage
   }
 
-  const appear = smoothstep(0.68, 0.95, t);
+  // en mode trajet, le départ est nommé au décollage, l'arrivée à l'atterrissage
+  const inB = smoothstep(0.68, 0.95, t);
+  const inA = S.trip ? (1 - smoothstep(0.04, 0.15, t)) * (1 - inB) : 0;
+  const show = inB > 0.01 ? { a:inB, lat:S.trip ? S.latB : S.lat,
+                              lon:S.trip ? S.lonB : S.lon,
+                              txt:(opt.title || (S.trip ? S.labelB : S.label) || "") }
+             : inA > 0.01 ? { a:inA, lat:S.lat, lon:S.lon, txt:(S.label || "") }
+             : null;
 
-  if (opt.cMark && appear > 0){
-    const cx = W/2, cy = H/2;
-    ctx.save();
-    for (let i = 0; i < 3; i++){
-      const p = ((time * 0.45 + i / 3) % 1);
-      ctx.globalAlpha = appear * (1 - p) * 0.6;
-      ctx.strokeStyle = "#e2a83c";
-      ctx.lineWidth = 2 * k;
-      ctx.beginPath();
-      ctx.arc(cx, cy, (14 + p * 62) * k, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = appear;
-    ctx.strokeStyle = "rgba(0,0,0,.55)";
-    ctx.lineWidth = 4 * k;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 9 * k, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = "#e2a83c";
-    ctx.beginPath();
-    ctx.arc(cx, cy, 5.5 * k, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
+  if (opt.cMark && show) drawPin(show.a, time, k);
+  if (opt.cTitle && show && show.txt.trim()) drawCard(show.txt.trim(), show.lat, show.lon, show.a, k);
 
-  if (opt.cTitle && appear > 0){
-    const text = (opt.title || S.label || "").trim();
-    if (text){
-      const pad = 34 * k;
-      const y = H - pad;             // ligne de base basse du cartouche
-      const plateH = 48 * k;
-      const top = y - plateH;
-      let x = pad;
-
-      ctx.save();
-      ctx.globalAlpha = appear;
-      ctx.translate(0, (1 - appear) * 18 * k);
-
-      // marque IGN : fichier fourni par l'utilisateur, sinon bloc typographique
-      ctx.shadowColor = "rgba(0,0,0,.6)";
-      ctx.shadowBlur = 10 * k;
-      if (logo.img && logo.img.naturalHeight){
-        const w = plateH * (logo.img.naturalWidth / logo.img.naturalHeight);
-        ctx.drawImage(logo.img, x, top, w, plateH);
-        x += w;
-      } else {
-        const w = 60 * k;
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(x, top, w, plateH);
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#0f3f7a";
-        ctx.font = "700 " + (31 * k) + "px 'Barlow Condensed', sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("IGN", x + w / 2, top + plateH / 2 + 1.5 * k);
-        ctx.textAlign = "left";
-        ctx.textBaseline = "alphabetic";
-        x += w;
-      }
-      ctx.shadowBlur = 0;
-
-      x += 14 * k;
-      ctx.fillStyle = "#e2a83c";
-      ctx.fillRect(x, top, 3 * k, plateH);
-      x += 3 * k + 14 * k;
-
-      ctx.shadowColor = "rgba(0,0,0,.75)";
-      ctx.shadowBlur = 12 * k;
-      ctx.textBaseline = "alphabetic";
-      ctx.fillStyle = "#fff";
-      ctx.font = "600 " + (34 * k) + "px 'Barlow Condensed', sans-serif";
-      ctx.fillText(text, x, y - 17 * k);
-      ctx.font = "500 " + (16 * k) + "px 'Barlow Semi Condensed', sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,.82)";
-      ctx.fillText(S.lat.toFixed(5) + "  " + S.lon.toFixed(5) + "   Vue aérienne IGN", x, y);
-      ctx.restore();
-    }
-  }
-
-  if (opt.cScale){
-    const mPerPx = spanToGround(s, S.lat) / W;
-    const maxLen = W * 0.16;
-    const meters = niceRound(maxLen * mPerPx);
-    const px = meters / mPerPx;
-    const x = W - 34 * k - px, y = H - 44 * k;
-    ctx.save();
-    ctx.globalAlpha = 0.92;
-    ctx.shadowColor = "rgba(0,0,0,.8)";
-    ctx.shadowBlur = 6 * k;
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 2 * k;
-    ctx.beginPath();
-    ctx.moveTo(x, y - 6 * k); ctx.lineTo(x, y); ctx.lineTo(x + px, y); ctx.lineTo(x + px, y - 6 * k);
-    ctx.stroke();
-    ctx.fillStyle = "#fff";
-    ctx.font = "500 " + (15 * k) + "px 'Barlow Semi Condensed', sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(meters >= 1000 ? (meters / 1000) + " km" : meters + " m", x + px / 2, y - 10 * k);
-    ctx.restore();
-  }
+  if (opt.cScale) drawScale(cam, k);
 
   // mention obligatoire des données
   ctx.save();
@@ -981,6 +1002,92 @@ function drawOverlay(s, t, time){
   ctx.shadowColor = "rgba(0,0,0,.8)";
   ctx.shadowBlur = 5 * k;
   ctx.fillText("© IGN — Géoplateforme", S.W - 34 * k, S.H - 22 * k);
+  ctx.restore();
+}
+
+function drawPin(a, time, k){
+  const cx = S.W / 2, cy = S.H / 2;
+  ctx.save();
+  for (let i = 0; i < 3; i++){
+    const p = ((time * 0.45 + i / 3) % 1);
+    ctx.globalAlpha = a * (1 - p) * 0.6;
+    ctx.strokeStyle = "#e2a83c";
+    ctx.lineWidth = 2 * k;
+    ctx.beginPath();
+    ctx.arc(cx, cy, (14 + p * 62) * k, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = a;
+  ctx.strokeStyle = "rgba(0,0,0,.55)";
+  ctx.lineWidth = 4 * k;
+  ctx.beginPath(); ctx.arc(cx, cy, 9 * k, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = "#e2a83c";
+  ctx.beginPath(); ctx.arc(cx, cy, 5.5 * k, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawCard(text, lat, lon, a, k){
+  const pad = 34 * k, y = S.H - pad, plateH = 48 * k, top = y - plateH;
+  let x = pad;
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.translate(0, (1 - a) * 18 * k);
+
+  ctx.shadowColor = "rgba(0,0,0,.6)";
+  ctx.shadowBlur = 10 * k;
+  if (logo.img && logo.img.naturalHeight){
+    const w = plateH * (logo.img.naturalWidth / logo.img.naturalHeight);
+    ctx.drawImage(logo.img, x, top, w, plateH);
+    x += w;
+  } else {
+    const w = 60 * k;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(x, top, w, plateH);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#0f3f7a";
+    ctx.font = "700 " + (31 * k) + "px 'Barlow Condensed', sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("IGN", x + w / 2, top + plateH / 2 + 1.5 * k);
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    x += w;
+  }
+  ctx.shadowBlur = 0;
+
+  x += 14 * k;
+  ctx.fillStyle = "#e2a83c";
+  ctx.fillRect(x, top, 3 * k, plateH);
+  x += 17 * k;
+
+  ctx.shadowColor = "rgba(0,0,0,.75)";
+  ctx.shadowBlur = 12 * k;
+  ctx.fillStyle = "#fff";
+  ctx.font = "600 " + (34 * k) + "px 'Barlow Condensed', sans-serif";
+  ctx.fillText(text, x, y - 17 * k);
+  ctx.font = "500 " + (16 * k) + "px 'Barlow Semi Condensed', sans-serif";
+  ctx.fillStyle = "rgba(255,255,255,.82)";
+  ctx.fillText(lat.toFixed(5) + "  " + lon.toFixed(5) + "   Vue aérienne IGN", x, y);
+  ctx.restore();
+}
+
+function drawScale(cam, k){
+  const lat = latFromMerc(cam.cy);
+  const mPerPx = spanToGround(cam.span, lat) / S.W;
+  const meters = niceRound(S.W * 0.16 * mPerPx);
+  const px = meters / mPerPx;
+  const x = S.W - 34 * k - px, y = S.H - 44 * k;
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.shadowColor = "rgba(0,0,0,.8)";
+  ctx.shadowBlur = 6 * k;
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2 * k;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 6*k); ctx.lineTo(x, y); ctx.lineTo(x + px, y); ctx.lineTo(x + px, y - 6*k);
+  ctx.stroke();
+  ctx.fillStyle = "#fff";
+  ctx.font = "500 " + (15 * k) + "px 'Barlow Semi Condensed', sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(meters >= 1000 ? (meters / 1000) + " km" : meters + " m", x + px / 2, y - 10 * k);
   ctx.restore();
 }
 
@@ -1011,13 +1118,12 @@ function dither(){
 const logo = { img:null };   // logo chargé localement, donc sans incidence sur l'export
 
 function frame(t, time){
-  const u = EASINGS[S.ease](t);
-  const s = spanAt(u), th = thetaAt(u);
-  renderGL(s, th, null, sharpAt(t));
+  const cam = cameraAt(t);
+  renderGL(cam, null, sharpAt(t));
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, S.W, S.H);
   ctx.drawImage(glCanvas, 0, 0);
-  drawOverlay(s, t, time);
+  drawOverlay(cam, t, time);
 }
 
 /* =======================================================================
@@ -1144,25 +1250,65 @@ function readSettings(){
   }
   out.width = glCanvas.width = S.W;
   out.height = glCanvas.height = S.H;
-  const sig = [S.lat, S.lon, S.W, S.H, S.duration, S.ease, S.w0, S.w1, S.rot, S.mode, S.tileTarget].join("|");
+  buildFly();
+  const sig = [S.lat, S.lon, S.latB, S.lonB, S.trip, S.W, S.H, S.duration,
+               S.ease, S.w0, S.w1, S.rot, S.mode, S.tileTarget].join("|");
   if (sig !== S.signature){ S.signature = sig; S.ready = false; }
 }
 
-function setTarget(lat, lon, label){
+function setTarget(lat, lon, label, which){
+  const B = which === "B";
   S.forceLayer = null;
-  S.lat = lat; S.lon = lon; S.label = label;
   const m = lonLatToMerc(lon, lat);
-  S.mx = m[0]; S.my = m[1];
-  el("tlabel").textContent = label;
-  el("tcoord").textContent = lat.toFixed(5) + " N   " + lon.toFixed(5) + " E";
-  el("target").hidden = false;
-  el("results").innerHTML = "";
-  el("play").disabled = false;
-  el("rec").disabled = false;
+  if (B){ S.latB = lat; S.lonB = lon; S.labelB = label; S.mxB = m[0]; S.myB = m[1]; }
+  else  { S.lat  = lat; S.lon  = lon; S.label  = label; S.mx  = m[0]; S.my  = m[1]; }
+
+  el(B ? "tlabelB" : "tlabel").textContent = label;
+  el(B ? "tcoordB" : "tcoord").textContent = lat.toFixed(5) + " N   " + lon.toFixed(5) + " E";
+  el(B ? "targetB" : "target").hidden = false;
+  el(B ? "resultsB" : "results").innerHTML = "";
   el("empty").style.display = "none";
+
+  // une fois le départ posé, le clic suivant vise naturellement l'arrivée
+  if (S.trip && !B && S.latB === null) setPick("B");
+
   S.ready = false;
   readSettings();
+  refreshActions();
   preview();
+}
+
+function setPick(w){
+  S.pick = w;
+  el("ptA").classList.toggle("active", S.trip && w === "A");
+  el("ptB").classList.toggle("active", S.trip && w === "B");
+}
+
+function refreshActions(){
+  const ok = S.lat !== null && (!S.trip || S.latB !== null);
+  el("play").disabled = S.busy || !ok;
+  el("rec").disabled  = S.busy || !ok;
+}
+
+function setTrip(on){
+  S.trip = on;
+  el("segOne").classList.toggle("on", !on);
+  el("segTrip").classList.toggle("on", on);
+  el("segOne").setAttribute("aria-pressed", String(!on));
+  el("segTrip").setAttribute("aria-pressed", String(on));
+  el("ptB").hidden = !on;
+  el("pickHint").hidden = !on;
+  el("labA").textContent = on ? "Départ" : "Adresse, lieu-dit, ou latitude et longitude";
+
+  // le rythme par défaut triple la vitesse à mi-parcours, là où se fait
+  // justement la traversée. On propose le rythme adapté, sans écraser un choix.
+  if (on && el("ease").value === "cinema") el("ease").value = "survol";
+  if (!on && el("ease").value === "survol") el("ease").value = "cinema";
+  setPick(on && S.lat !== null && S.latB === null ? "B" : "A");
+  S.ready = false;
+  readSettings();
+  refreshActions();
+  if (S.lat !== null) preview(); else homeView();
 }
 
 // aperçu rapide : uniquement les tuiles de la première image
@@ -1170,9 +1316,10 @@ async function preview(){
   if (S.busy || S.lat === null) return;
   say("Chargement de l'aperçu…");
   const maxZ = maxZoom();
+  const cam0 = cameraAt(0);
   const list = [];
-  for (const lv of levelsAt(S.s0, maxZ)){
-    const k = layerAt(lv.z), r = rangeAt(lv.z, S.s0, thetaAt(0));
+  for (const lv of levelsAt(cam0.span, maxZ)){
+    const k = layerAt(lv.z), r = rangeAt(lv.z, cam0);
     for (let x = r.x0; x <= r.x1; x++)
       for (let y = r.y0; y <= r.y1; y++)
         if (!tiles.has(tkey(k, lv.z, x, y))) list.push({ k, z:lv.z, x, y });
@@ -1257,9 +1404,9 @@ async function prepare(){
 
 function lockUI(on){
   S.busy = on;
-  el("play").disabled = on || S.lat === null;
-  el("rec").disabled  = on || S.lat === null;
+  refreshActions();
   el("find").disabled = on;
+  el("findB").disabled = on;
 }
 
 /* --- lancement --- */
@@ -1271,8 +1418,8 @@ el("play").addEventListener("click", async () => {
     await prepare();
     say("Lecture…");
     await runAnimation();
-    const zEnd = levelsAt(S.s1, S.effMaxZ, 1).slice(-1)[0].z;
-    const pxTile = 256 * Math.pow(2, Math.log2(S.W / (256 * S.s1)) - zEnd);
+    const zEnd = levelsAt(finalSpan(), S.effMaxZ, 1).slice(-1)[0].z;
+    const pxTile = 256 * Math.pow(2, Math.log2(S.W / (256 * finalSpan())) - zEnd);
     say("Terminé. Image finale au niveau IGN " + zEnd
         + " (" + Math.round(pxTile) + " px par tuile).");
   }catch(e){
@@ -1434,28 +1581,29 @@ el("rec").addEventListener("click", async () => {
   }finally{ loader.hide(); lockUI(false); progress(0); }
 });
 
-/* --- recherche --- */
-async function doSearch(){
-  const q = el("q").value.trim();
+/* --- recherche, pour le départ comme pour l'arrivée --- */
+async function doSearch(which){
+  const B = which === "B";
+  const input = el(B ? "qB" : "q"), btn = el(B ? "findB" : "find");
+  const q = input.value.trim();
   if (!q) return;
   const c = parseCoords(q);
-  if (c){ setTarget(c.lat, c.lon, "Point " + c.lat.toFixed(5) + ", " + c.lon.toFixed(5)); return; }
+  if (c){ setTarget(c.lat, c.lon, "Point " + c.lat.toFixed(5) + ", " + c.lon.toFixed(5), which); return; }
   say("Recherche…");
-  el("find").disabled = true;
+  btn.disabled = true;
   try{
     const res = await geocode(q);
-    const ul = el("results");
+    const ul = el(B ? "resultsB" : "results");
     ul.innerHTML = "";
     if (!res.length){ say("Aucun lieu trouvé. Essayez une adresse plus complète, ou saisissez des coordonnées.", true); return; }
     for (const r of res){
       const li = document.createElement("li");
       li.tabIndex = 0;
-      li.innerHTML = "";
       li.append(r.label);
       const i = document.createElement("i");
       i.textContent = (r.extra ? r.extra + " · " : "") + r.lat.toFixed(5) + ", " + r.lon.toFixed(5);
       li.append(i);
-      const pick = () => setTarget(r.lat, r.lon, r.label);
+      const pick = () => setTarget(r.lat, r.lon, r.label, which);
       li.addEventListener("click", pick);
       li.addEventListener("keydown", e => { if (e.key === "Enter") pick(); });
       ul.append(li);
@@ -1463,15 +1611,23 @@ async function doSearch(){
     say("Choisissez un résultat dans la liste.");
   }catch(e){
     say("La recherche n'a pas abouti : " + e.message, true);
-  }finally{ el("find").disabled = false; }
+  }finally{ btn.disabled = false; }
 }
-el("find").addEventListener("click", doSearch);
-el("q").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+el("find").addEventListener("click", () => doSearch("A"));
+el("findB").addEventListener("click", () => doSearch("B"));
+el("q").addEventListener("keydown", e => { if (e.key === "Enter") doSearch("A"); });
+el("qB").addEventListener("keydown", e => { if (e.key === "Enter") doSearch("B"); });
+el("q").addEventListener("focus", () => setPick("A"));
+el("qB").addEventListener("focus", () => setPick("B"));
+
+el("segOne").addEventListener("click", () => setTrip(false));
+el("segTrip").addEventListener("click", () => setTrip(true));
 
 for (const b of document.querySelectorAll(".chips button")){
   b.addEventListener("click", () => {
-    el("q").value = b.dataset.label;
-    setTarget(parseFloat(b.dataset.lat), parseFloat(b.dataset.lon), b.dataset.label);
+    el(S.trip && S.pick === "B" ? "qB" : "q").value = b.dataset.label;
+    setTarget(parseFloat(b.dataset.lat), parseFloat(b.dataset.lon), b.dataset.label,
+              S.trip ? S.pick : "A");
   });
 }
 
@@ -1492,10 +1648,11 @@ async function homeView(){
   S.forceLayer = "plan";                 // le plan couvre le monde aux petits zooms
   S.effMaxZ = LAYERS.plan.maxZ;
   const s = groundToSpan(HOME.km * 1000, HOME.lat);
+  const cam = { cx:S.mx, cy:S.my, span:s, theta:0 };
 
   const list = [];
   for (const lv of levelsAt(s, LAYERS.plan.maxZ)){
-    const r = rangeAt(lv.z, s, 0);
+    const r = rangeAt(lv.z, cam);
     for (let x = r.x0; x <= r.x1; x++)
       for (let y = r.y0; y <= r.y1; y++)
         if (!tiles.has(tkey("plan", lv.z, x, y))) list.push({ k:"plan", z:lv.z, x, y });
@@ -1506,7 +1663,7 @@ async function homeView(){
 
   // composition finale, identique avec ou sans animation d'ouverture
   const settle = () => {
-    renderGL(s, 0);
+    renderGL(cam);
     compositeHome();
     say("Cliquez sur la carte pour viser un point.");
   };
@@ -1518,7 +1675,7 @@ async function homeView(){
   S.introDone = true;
   S.introStop = false;
   const target = sceneTarget();
-  renderGL(s, 0, target.fbo);
+  renderGL(cam, target.fbo);
   say("");
 
   await new Promise(done => {
@@ -1580,7 +1737,8 @@ out.addEventListener("click", async e => {
 
   say("Localisation du point…");
   const label = await reverseLabel(lon, lat);
-  setTarget(lat, lon, label || (lat.toFixed(5) + ", " + lon.toFixed(5)));
+  setTarget(lat, lon, label || (lat.toFixed(5) + ", " + lon.toFixed(5)),
+            S.trip ? S.pick : "A");
 });
 
 /* --- logo IGN incrusté, livré avec le dépôt --- */
@@ -1613,6 +1771,8 @@ out.addEventListener("click", async e => {
 })();
 
 readSettings();
+setPick("A");
+refreshActions();
 homeView();
 </script>
 </body>

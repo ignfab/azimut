@@ -6,12 +6,51 @@ de la Géoplateforme IGN, et l'exporte en vidéo. Pensé pour le montage d'un su
 Tout tient dans `index.html` : pas de build, pas de dépendance, pas de clé d'API.
 Ouvrez le fichier dans un navigateur, ou servez-le en statique.
 
+## Deux mouvements
+
+**Un point** — descente verticale depuis un cadre large jusqu'au point visé.
+
+**D'un point à l'autre** — on décolle du départ, on monte, on traverse, on
+redescend sur l'arrivée. La trajectoire suit van Wijk et Nuij (2003), l'unique
+chemin où la vitesse perçue reste constante : sans lui, la traversée au sommet
+paraît glisser trop vite et la descente traîne.
+
+La largeur au sommet vaut `w0·cosh(r0)`, relation qui s'inverse — « cadre de
+départ » fixe donc directement l'altitude du survol, et le paramètre ρ s'en
+déduit. Il est borné à 3, si bien qu'un trajet court ne part pas dans l'espace :
+deux quartiers de Lyon culminent à 9 km de large, Nantes–Rennes à 452 km.
+
+### Rythme d'un trajet
+
+Le rythme « Départ et arrivée doux » atteint trois fois la vitesse moyenne à
+mi-parcours — exactement là où se fait la traversée. Le mode trajet bascule donc
+sur « Survol régulier », qui monte en vitesse sur les premiers 22 % du temps, la
+maintient constante, puis redescend : pointe à 1,28 fois la moyenne seulement.
+
+La largeur des rampes se règle par la constante `EASE_ENDS` en tête de script.
+
+| `EASE_ENDS` | vitesse à mi-parcours |
+|---|---|
+| 0.10 | ×1,11 — traversée très posée, départ plus sec |
+| 0.22 | ×1,28 — réglage livré |
+| 0.40 | ×1,67 — départ moelleux, traversée plus vive |
+
+Deux autres leviers calment le mouvement : allonger la durée, ou augmenter
+« cadre de départ ». Monter plus haut réduit la distance parcourue en nombre
+d'écrans, donc la vitesse perçue.
+
+Un trajet coûte environ 1,6 à 1,8 fois les tuiles d'un zoom simple sur longue
+distance, et moins qu'un zoom simple en deçà de quelques kilomètres.
+
 ## Utilisation
 
 À l'ouverture, la carte de France s'affiche. Cliquez dessus pour viser un point :
 Azimut interroge le géocodage inverse pour en retrouver le nom.
 
-1. Cliquez sur la carte, ou saisissez une adresse, un lieu-dit, ou `48.8584, 2.2945`.
+1. Choisissez le mouvement en haut du panneau.
+2. Cliquez sur la carte, ou saisissez une adresse, un lieu-dit, ou `48.8584, 2.2945`.
+   En mode trajet, le clic renseigne le point encadré, et passe à l'arrivée
+   une fois le départ posé.
 2. Réglez la durée, le cadre de départ et d'arrivée, le rythme.
 3. **Lancer l'animation** précharge les tuiles puis joue le plan.
 4. **Enregistrer la vidéo** rejoue le plan et télécharge un WebM.
