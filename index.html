@@ -305,7 +305,7 @@ button.ghost:hover:not(:disabled){background:rgba(106,106,244,.14);color:var(--h
             <label for="mode">Fond</label>
             <select id="mode">
               <option value="ortho" selected>Photo aérienne seule</option>
-              <option value="mix">Plan IGN puis photo aérienne</option>
+              <option value="mix">Photo aérienne puis plan IGN</option>
               <option value="plan">Plan IGN seul</option>
             </select>
           </div>
@@ -419,7 +419,10 @@ const LAYERS = {
   plan : { id:"GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2", fmt:"image/png",  ext:"png", maxZ:19 },
   ortho: { id:"ORTHOIMAGERY.ORTHOPHOTOS",          fmt:"image/jpeg", ext:"jpg", maxZ:20 }
 };
-const SWITCH_Z = 12;   // niveau où le plan cède la place à la photo, en mode "mix"
+// niveau où la photo cède la place au plan, en mode "mix".
+// Tard dans la descente : on garde la photo tant qu'elle porte le spectacle,
+// et on ne bascule que là où le plan devient plus lisible qu'elle, vers 3 km de large.
+const SWITCH_Z = 16;
 
 // logo incrusté dans le cartouche. Remplacez le fichier pour changer de marque.
 const IGN_LOGO_URL = "assets/ign_logo.png";
@@ -432,7 +435,7 @@ function layerAt(z){
   if (levelLayer.has(z)) return levelLayer.get(z);
   if (S.mode === "plan")  return "plan";
   if (S.mode === "ortho") return "ortho";
-  return z < SWITCH_Z ? "plan" : "ortho";
+  return z < SWITCH_Z ? "ortho" : "plan";
 }
 function maxZoom(){
   if (S.mode === "plan") return LAYERS.plan.maxZ;

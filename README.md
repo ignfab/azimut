@@ -100,7 +100,8 @@ Le rendu est un pipeline WebGL de tuiles Web Mercator.
 - Les tuiles restent en VRAM sans éviction. Une longue session multiplie les lieux et
   peut dépasser 300 Mo ; recharger la page suffit.
 - Aux zooms faibles, l'ortho ne couvre que la France. Pour un cadre de départ large,
-  préférez « Plan IGN puis photo aérienne ».
+  préférez « Photo aérienne puis plan IGN », qui bascule sur le plan à
+  partir du niveau 16, soit environ 3 km de large.
 
 ## Arborescence
 
