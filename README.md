@@ -58,7 +58,31 @@ Le rendu est un pipeline WebGL de tuiles Web Mercator.
 - Aux zooms faibles, l'ortho ne couvre que la France. Pour un cadre de départ large,
   préférez « Plan IGN puis photo aérienne ».
 
-## Logo
+## Arborescence
 
-`logo/` contient le lockup en blanc, en encre, en version adaptative, et l'icône
-carrée. Le mot est vectorisé, il n'y a aucune dépendance à une police.
+```
+index.html              toute l'application, sans dépendance ni build
+assets/ign_logo.png     logo incrusté dans le cartouche vidéo
+assets/azimut-*.svg     identité Azimut : lockup blanc, encre, adaptatif, icône
+tools/embed-logo.py     produit une version à fichier unique, logo en base64
+```
+
+## Servir la page
+
+Le logo est chargé depuis `assets/`. Ouvrir `index.html` en double-cliquant place la
+page en origine `file://`, ce qui altère le canvas et ferait échouer l'export vidéo :
+l'application le détecte, prévient, et retombe sur un bloc IGN dessiné.
+
+Passez donc par un serveur :
+
+```
+python -m http.server 8000
+```
+
+puis `http://localhost:8000/`. La version publiée sur GitHub Pages n'a pas ce problème.
+
+Pour un fichier unique distribuable, qui fonctionne même en double-clic :
+
+```
+python tools/embed-logo.py      # ecrit azimut-autonome.html
+```

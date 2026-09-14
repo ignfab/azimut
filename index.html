@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Azimut — animations cartographiques IGN</title>
-<link rel="icon" type="image/svg+xml" href="logo/azimut-icone.svg">
+<link rel="icon" type="image/svg+xml" href="assets/azimut-icone.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
@@ -165,13 +165,6 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
 .lbar i{display:block;height:100%;width:0;background:var(--hydro);transition:width .1s linear}
 .lsub{margin-top:9px;font-size:14px;color:var(--paper-dim);font-variant-numeric:tabular-nums;min-height:20px}
 
-.filerow{display:flex;align-items:center;gap:9px}
-.filerow input[type=file]{font-size:13px;color:var(--paper-dim);width:100%;font-family:inherit}
-.filerow input[type=file]::file-selector-button{
-  font-family:inherit;font-size:14px;background:var(--panel-2);color:var(--paper);
-  border:1px solid var(--line);border-radius:var(--radius);padding:6px 11px;margin-right:9px;cursor:pointer;
-}
-.filerow input[type=file]::file-selector-button:hover{border-color:var(--hydro)}
 
 @media (max-width:900px){
   #app{grid-template-columns:1fr;grid-template-rows:auto 1fr;overflow:auto}
@@ -313,10 +306,6 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(-
           <label for="title">Titre affiché à l'arrivée</label>
           <input type="text" id="title" placeholder="repris du lieu recherché">
         </div>
-        <div class="field">
-          <label for="logo">Logo à incruster — sinon un bloc IGN est dessiné</label>
-          <div class="filerow"><input type="file" id="logo" accept="image/png,image/jpeg,image/svg+xml,image/webp"></div>
-        </div>
         <div class="field checks">
           <label class="check"><input type="checkbox" id="cMark" checked> Repère</label>
           <label class="check"><input type="checkbox" id="cTitle" checked> Titre</label>
@@ -385,6 +374,9 @@ const LAYERS = {
   ortho: { id:"ORTHOIMAGERY.ORTHOPHOTOS",          fmt:"image/jpeg", ext:"jpg", maxZ:20 }
 };
 const SWITCH_Z = 12;   // niveau où le plan cède la place à la photo, en mode "mix"
+
+// logo incrusté dans le cartouche. Remplacez le fichier pour changer de marque.
+const IGN_LOGO_URL = "assets/ign_logo.png";
 
 function layerAt(z){
   if (S.mode === "plan")  return "plan";
@@ -1095,19 +1087,29 @@ for (const id of ["dur","ease","w0","w1","hold0","hold1","rot","mode","res","qua
   });
 }
 
-/* --- logo incrusté, lu en local pour ne pas altérer l'export --- */
-el("logo").addEventListener("change", e => {
-  const f = e.target.files && e.target.files[0];
-  if (!f){ logo.img = null; if (S.lat !== null) frame(0, 0); return; }
-  const r = new FileReader();
-  r.onload = () => {
-    const img = new Image();
-    img.onload = () => { logo.img = img; if (S.lat !== null) frame(0, 0); };
-    img.onerror = () => say("Ce fichier logo n'a pas pu être lu.", true);
-    img.src = r.result;
+/* --- logo IGN incrusté, livré avec le dépôt --- */
+(function loadIgnLogo(){
+  const img = new Image();
+  img.onload = () => {
+    // une image d'une autre origine altère le canvas et ferait échouer l'export.
+    // On le vérifie tout de suite plutôt qu'au moment d'enregistrer.
+    try{
+      const probe = document.createElement("canvas");
+      probe.width = probe.height = 1;
+      const p = probe.getContext("2d");
+      p.drawImage(img, 0, 0, 1, 1);
+      p.getImageData(0, 0, 1, 1);
+      logo.img = img;
+    }catch(err){
+      logo.img = null;
+      say("Le logo n'a pas pu être incrusté : ouvrez la page via un serveur web, "
+        + "pas en double-cliquant le fichier. Un bloc IGN est dessiné à la place.", true);
+    }
+    if (S.lat !== null) frame(0, 0);
   };
-  r.readAsDataURL(f);
-});
+  img.onerror = () => { /* absent : le bloc IGN dessiné prend le relais */ };
+  img.src = IGN_LOGO_URL;
+})();
 
 readSettings();
 </script>
