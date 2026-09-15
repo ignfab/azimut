@@ -344,9 +344,9 @@ button.ghost:hover:not(:disabled){background:rgba(106,106,244,.14);color:var(--h
             <input type="number" id="hold1" value="2" min="0" max="10" step="0.5">
           </div>
         </div>
-        <div class="field">
-          <label for="rot">Rotation pendant la descente (°) — se termine plein nord</label>
-          <input type="number" id="rot" value="6" min="0" max="25" step="1">
+        <div class="field checks">
+          <label class="check"><input type="checkbox" id="cRot" checked>
+            Légère rotation à l'arrivée</label>
         </div>
       </div>
       </details>
@@ -916,7 +916,30 @@ function rangeAt(z, cam){
 }
 
 const spanAt = u => S.s0 * Math.pow(S.s1 / S.s0, u);
-const thetaAt = u => (1 - u) * S.rot * D2R;
+/* Rotation d'arrivée. Elle ne joue plus pendant toute la descente : elle
+   s'installe sur la fin du mouvement et se poursuit pendant la pause finale,
+   pour que l'image posée ne soit pas parfaitement figée.
+
+     rate  vitesse en degrés par seconde, une fois installée
+     fade  fraction du zoom à partir de laquelle elle démarre
+     ramp  secondes de montée en vitesse, pour éviter tout à-coup           */
+const ROT = { rate: 1.40, fade: 0.72, ramp: 1.2 };
+
+// angle cumulé : intégrale d'une vitesse qui monte en douceur, donc dérivée
+// nulle au démarrage. Fonction du temps seul, donc identique à chaque relecture.
+function rotAt(time){
+  if (!S.rot) return 0;
+  const x = Math.max(0, time - (S.hold0 + ROT.fade * S.duration));
+  const T = ROT.ramp;
+  const a = x / T;
+  const integ = x <= T ? T * (a*a*a - a*a*a*a / 2) : T / 2 + (x - T);
+  return -ROT.rate * D2R * integ;
+}
+
+// instant correspondant à un avancement t, quand l'appelant ne l'a pas sous la main.
+// À t = 1 on retient la fin de la pause, c'est-à-dire la rotation maximale :
+// le plan de chargement couvre ainsi toute la durée du maintien.
+const timeOf = t => t >= 1 ? S.hold0 + S.duration + S.hold1 : S.hold0 + t * S.duration;
 
 /* ---------------------------------------------------------------------
    Trajet d'un point à l'autre.
@@ -966,9 +989,9 @@ function flyAt(u){
 }
 
 // état de la caméra à l'instant normalisé t
-function cameraAt(t){
+function cameraAt(t, time){
   const u = EASINGS[S.ease](t);
-  const theta = thetaAt(u);
+  const theta = rotAt(time === undefined ? timeOf(t) : time);
   if (S.trip && S.fly){
     const p = flyAt(u);
     return { cx:p.cx, cy:p.cy, span:p.span, theta };
@@ -1415,7 +1438,7 @@ function dither(){
 const logo = { img:null };   // logo chargé localement, donc sans incidence sur l'export
 
 function frame(t, time){
-  const cam = cameraAt(t);
+  const cam = cameraAt(t, time);
   renderScene(cam, sharpAt(t));
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, S.W, S.H);
@@ -1529,7 +1552,7 @@ function readSettings(){
   S.ease  = el("ease").value;
   S.w0 = clamp(parseFloat(el("w0").value) || 1400, 10, 6000) * 1000;
   S.w1 = clamp(parseFloat(el("w1").value) || 300, 20, 200000);
-  S.rot = clamp(parseFloat(el("rot").value) || 0, 0, 40);
+  S.rot = el("cRot").checked;
   S.mode = el("mode").value;
   S.tileTarget = parseInt(el("qual").value, 10);
   S.fps = parseInt(el("fps").value, 10);
@@ -1937,7 +1960,7 @@ for (const b of document.querySelectorAll(".chips button")){
 
 /* --- réglages : redessine l'aperçu --- */
 let previewTimer = null;
-for (const id of ["dur","ease","w0","w1","hold0","hold1","rot","mode","res","qual","fps","vq","title","cMark","cTitle","cScale","cVig","cBoost"]){
+for (const id of ["dur","ease","w0","w1","hold0","hold1","cRot","mode","res","qual","fps","vq","title","cMark","cTitle","cScale","cVig","cBoost"]){
   el(id).addEventListener("change", () => {
     readSettings();
     clearTimeout(previewTimer);

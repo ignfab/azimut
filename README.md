@@ -130,6 +130,12 @@ Le rendu est un pipeline WebGL de tuiles Web Mercator.
 - **Fondu entre niveaux.** Le niveau courant est dessiné opaque, le niveau suivant
   en fondu par-dessus. Le passage d'un niveau à l'autre est une opération neutre,
   ce qui rend le changement de résolution invisible.
+- **Rotation d'arrivée.** Optionnelle, elle ne joue pas pendant la descente : la
+  vitesse monte en douceur à partir de 72 % du mouvement et se maintient pendant
+  la pause finale, pour que l'image posée ne soit pas parfaitement figée. Environ
+  3° sur un plan de 14 s. C'est l'intégrale d'une vitesse qui démarre à zéro,
+  donc sans à-coup, et fonction du temps seul : chaque relecture est identique.
+  Réglages dans la constante `ROT`.
 - **Netteté à l'arrivée.** Sur les derniers 14 % du mouvement, le niveau affiché
   devient celui dont la résolution native est la plus proche de celle de l'écran,
   et non celui que dicte le réglage de finesse. Les tuiles concernées sont presque
