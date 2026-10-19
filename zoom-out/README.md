@@ -1,7 +1,7 @@
 # Zoom Out
 
-On part de n'importe où en France, au ras des toits, et la vue aérienne s'éloigne
-lentement. Le premier qui trouve où l'on est gagne.
+On part de n'importe où en France, tout près du sol, et la vue aérienne s'éloigne
+sans jamais s'arrêter. Le premier qui trouve où l'on est gagne.
 
 Un seul fichier, `index.html`, sans dépendance, sans serveur, sans clé d'API. Il
 réutilise les flux ouverts de la Géoplateforme IGN, comme Azimut.
@@ -19,7 +19,7 @@ seule réponse par manche, de deux façons :
 - **taper le nom de la commune** — l'orthographe est traitée avec indulgence :
   accents, tirets, « St » pour Saint, articles, et une à trois petites fautes
   selon la longueur du nom. Le bon nom donne la distance zéro ;
-- **ou cliquer sur la petite carte**, puis valider.
+- **ou cliquer sur la petite carte** : le clic vaut réponse, sans confirmation.
 
 Taper une autre commune que la bonne n'est pas perdu : elle compte comme un
 point posé en son centre, et rapporte des points selon la distance.
