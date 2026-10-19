@@ -203,6 +203,13 @@ button.ghost:hover:not(:disabled){background:rgba(106,106,244,.14);color:var(--h
 #loader{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
   background:rgba(15,15,15,.82)}
 #loader.on{display:flex}
+#loader.compact{align-items:flex-end;background:transparent;pointer-events:none}
+#loader.compact .lcard{background:rgba(15,15,15,.9);padding:16px 24px 14px;margin-bottom:30px;
+  width:min(360px,70%)}
+#loader.compact .lnum{font-size:40px}
+#loader.compact .lnum small{font-size:18px}
+#loader.compact .ltxt{font-size:15px;margin-top:4px}
+#loader.compact .lbar{margin-top:10px}
 .lcard{width:min(400px,78%);text-align:center;padding:30px 34px}
 .lnum{font-family:'Barlow Condensed','Public Sans',sans-serif;font-size:74px;font-weight:600;
   line-height:.92;color:var(--hydro-hi);font-variant-numeric:tabular-nums}
@@ -1764,6 +1771,188 @@ function pickMime(){
   return "";
 }
 
+/* Multiplexeur WebM minimal : une piste vidéo VP9 ou VP8, SeekHead et Cues
+   pour que le fichier soit navigable dans un lecteur ou un logiciel de montage. */
+const WebM = (() => {
+  const txt = new TextEncoder();
+  const idB = id => { const b = []; while (id > 0){ b.unshift(id & 0xff); id = Math.floor(id / 256); } return b; };
+  const vint = (n, w) => {
+    if (!w){ w = 1; while (n >= Math.pow(2, 7 * w) - 1) w++; }
+    const b = new Array(w);
+    for (let i = w - 1, v = n; i >= 0; i--){ b[i] = v % 256; v = Math.floor(v / 256); }
+    b[0] |= 0x80 >> (w - 1);
+    return b;
+  };
+  const uint = (v, w) => {
+    if (!w){ w = 1; while (v >= Math.pow(2, 8 * w)) w++; }
+    const b = new Array(w);
+    for (let i = w - 1; i >= 0; i--){ b[i] = v % 256; v = Math.floor(v / 256); }
+    return b;
+  };
+  // un élément = { parts:[Uint8Array…], len }
+  function E(id, kids, sizeWidth){
+    const parts = []; let len = 0;
+    for (const k of kids){
+      if (k instanceof Uint8Array){ parts.push(k); len += k.length; }
+      else for (const p of k.parts){ parts.push(p); len += p.length; }
+    }
+    const head = new Uint8Array(idB(id).concat(vint(len, sizeWidth)));
+    return { parts:[head].concat(parts), len: head.length + len };
+  }
+  const U = (id, v, w) => E(id, [new Uint8Array(uint(v, w))]);
+  const S = (id, s) => E(id, [txt.encode(s)]);
+  const F = (id, v) => { const d = new DataView(new ArrayBuffer(8)); d.setFloat64(0, v); return E(id, [new Uint8Array(d.buffer)]); };
+  const B = (id, bytes) => E(id, [new Uint8Array(bytes)]);
+
+  // frames : [{ data:Uint8Array, ts:microsecondes, key:bool }] dans l'ordre de décodage
+  function mux({ width, height, fps, codecId, frames }){
+    const ebml = E(0x1A45DFA3, [
+      U(0x4286, 1), U(0x42F7, 1), U(0x42F2, 4), U(0x42F3, 8),
+      S(0x4282, "webm"), U(0x4287, 4), U(0x4285, 2)
+    ]);
+
+    const durMs = frames.length ? Math.round(frames[frames.length - 1].ts / 1000 + 1000 / fps) : 0;
+    const info = E(0x1549A966, [
+      U(0x2AD7B1, 1000000),            // une unité de temps = 1 ms
+      S(0x4D80, "Azimut"), S(0x5741, "Azimut"),
+      F(0x4489, durMs)
+    ]);
+    const tracks = E(0x1654AE6B, [E(0xAE, [
+      U(0xD7, 1), U(0x73C5, 1), U(0x83, 1), U(0x9C, 0),
+      S(0x86, codecId),
+      U(0x23E383, Math.round(1e9 / fps)),
+      E(0xE0, [U(0xB0, width), U(0xBA, height)])
+    ])]);
+
+    // une grappe par image clé, ou au plus tard toutes les 30 s
+    const clusters = [], cueAt = [];
+    let cur = null, base = 0;
+    const flush = () => { if (cur){ clusters.push(E(0x1F43B675, cur, 8)); cur = null; } };
+    for (const f of frames){
+      const ms = Math.round(f.ts / 1000);
+      if (!cur || f.key || ms - base > 30000){
+        flush();
+        base = ms; cur = [U(0xE7, base)];
+        cueAt.push({ ms, idx: clusters.length });
+      }
+      const rel = ms - base;
+      const hdr = new Uint8Array([0x81, (rel >> 8) & 0xff, rel & 0xff, f.key ? 0x80 : 0x00]);
+      cur.push(E(0xA3, [hdr, f.data]));
+    }
+    flush();
+
+    // SeekHead à positions de largeur fixe : sa taille ne dépend pas des valeurs
+    const seekHead = pos => E(0x114D9B74, [
+      E(0x4DBB, [B(0x53AB, idB(0x1549A966)), U(0x53AC, pos.info, 8)]),
+      E(0x4DBB, [B(0x53AB, idB(0x1654AE6B)), U(0x53AC, pos.tracks, 8)]),
+      E(0x4DBB, [B(0x53AB, idB(0x1C53BB6B)), U(0x53AC, pos.cues, 8)])
+    ]);
+    const L = seekHead({ info:0, tracks:0, cues:0 }).len;
+    const pInfo = L, pTracks = pInfo + info.len, pClusters = pTracks + tracks.len;
+
+    const clusterPos = []; let acc = pClusters;
+    for (const c of clusters){ clusterPos.push(acc); acc += c.len; }
+    const cues = E(0x1C53BB6B, cueAt.map(c => E(0xBB, [
+      U(0xB3, c.ms),
+      E(0xB7, [U(0xF7, 1), U(0xF1, clusterPos[c.idx], 8)])
+    ])));
+
+    const segment = E(0x18538067,
+      [seekHead({ info:pInfo, tracks:pTracks, cues:acc }), info, tracks]
+        .concat(clusters, [cues]), 8);
+
+    return ebml.parts.concat(segment.parts);   // à passer tel quel à new Blob(...)
+  }
+  return { mux };
+})();
+
+// avancement du mouvement à un instant donné, pauses comprises
+function tAtTime(time){
+  if (time < S.hold0) return 0;
+  if (time < S.hold0 + S.duration) return (time - S.hold0) / S.duration;
+  return 1;
+}
+
+/* --- encodage image par image avec WebCodecs ---
+   MediaRecorder enregistre en temps réel : si la machine ne rend pas 50 images
+   par seconde, les images manquées sont absentes du fichier, d'où les saccades.
+   Ici chaque image reçoit un horodatage exact, quelle que soit la durée de son
+   rendu. Une machine lente encode plus longtemps, la vidéo reste parfaitement
+   fluide.                                                                    */
+async function pickEncoder(){
+  if (!window.VideoEncoder || !window.VideoFrame) return null;
+  const cands = [
+    ["vp09.00.41.08", "V_VP9"],   // VP9 niveau 4.1 : 1080p jusqu'à 60 i/s
+    ["vp09.00.40.08", "V_VP9"],
+    ["vp09.00.31.08", "V_VP9"],
+    ["vp8",           "V_VP8"]
+  ];
+  for (const [codec, codecId] of cands){
+    const config = {
+      codec, width:S.W, height:S.H, framerate:S.fps,
+      bitrate: videoBitrate(), bitrateMode:"variable",
+      latencyMode:"quality", hardwareAcceleration:"no-preference"
+    };
+    try{
+      const r = await VideoEncoder.isConfigSupported(config);
+      if (r.supported) return { config: r.config || config, codecId };
+    }catch(e){ /* configuration refusée : candidat suivant */ }
+  }
+  return null;
+}
+
+async function exportVideo(ec){
+  const frames = [];
+  let failure = null;
+  const enc = new VideoEncoder({
+    output: chunk => {
+      const data = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(data);
+      frames.push({ data, ts: chunk.timestamp, key: chunk.type === "key" });
+    },
+    error: e => { failure = e; }
+  });
+  enc.configure(ec.config);
+
+  const total = S.hold0 + S.duration + S.hold1;
+  const n = Math.round(total * S.fps);
+  const step = 1e6 / S.fps;
+  const t0 = performance.now();
+
+  loader.root.classList.add("compact");          // on voit le plan se fabriquer
+  loader.show("Encodage de la vidéo", "");
+  try{
+    for (let i = 0; i < n; i++){
+      if (failure) throw failure;
+      const time = i / S.fps;
+      frame(tAtTime(time), time);
+      const vf = new VideoFrame(out, { timestamp: Math.round(i * step), duration: Math.round(step) });
+      enc.encode(vf, { keyFrame: i % S.fps === 0 });  // une image clé par seconde
+      vf.close();
+
+      // on n'empile pas plus de quelques images d'avance sur l'encodeur
+      while (enc.encodeQueueSize > 4) await new Promise(r => setTimeout(r, 2));
+
+      if (i % 3 === 0 || i === n - 1){
+        const el_ = (performance.now() - t0) / 1000;
+        const left = el_ / (i + 1) * (n - i - 1);
+        loader.set((i + 1) / n, (i + 1) + " / " + n + " images"
+          + (i > 10 ? " — encore " + Math.ceil(left) + " s" : ""));
+        await new Promise(r => setTimeout(r, 0));     // laisse l'interface respirer
+      }
+    }
+    await enc.flush();
+    if (failure) throw failure;
+  } finally {
+    if (enc.state !== "closed") enc.close();
+    loader.root.classList.remove("compact");
+  }
+
+  const parts = WebM.mux({ width:S.W, height:S.H, fps:S.fps, codecId:ec.codecId, frames });
+  return { blob: new Blob(parts, { type:"video/webm" }),
+           seconds: (performance.now() - t0) / 1000, n };
+}
+
 // débit calculé à partir du format et de la cadence, pas une valeur fixe.
 // Un zoom plein cadre n'offre aucune zone statique à l'encodeur : il lui faut
 // beaucoup plus de bits par pixel qu'une scène ordinaire.
@@ -1828,11 +2017,7 @@ async function exportFrames(slug){
   loader.show("Rendu des images", n + " images en " + S.W + " × " + S.H);
   for (let i = 0; i < n; i++){
     const time = i / S.fps;
-    let t;
-    if (time < S.hold0) t = 0;
-    else if (time < S.hold0 + S.duration) t = (time - S.hold0) / S.duration;
-    else t = 1;
-    frame(clamp(t, 0, 1), time);
+    frame(tAtTime(time), time);
     const blob = await new Promise(r => out.toBlob(r, "image/png"));
     const buf = new Uint8Array(await blob.arrayBuffer());
     entries.push({
@@ -1848,32 +2033,51 @@ async function exportFrames(slug){
   return zip;
 }
 
+function download(blob, name){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  return "<a href='" + url + "' download='" + name + "'>Retélécharger</a>";
+}
+
 el("rec").addEventListener("click", async () => {
   readSettings();
-  if (!window.MediaRecorder){
-    say("Ce navigateur ne sait pas enregistrer une vidéo. Essayez Chrome, Edge ou Firefox.", true);
-    return;
-  }
   lockUI(true);
   try{
     await document.fonts.ready;
     await prepare();
     const slug = (S.label || "point").toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
       .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "ign";
 
-    // suite d'images : rendu déterministe, aucune perte, aucune contrainte de temps réel
+    // suite d'images : rendu déterministe, aucune perte
     if (S.vq === "png"){
       const zip = await exportFrames("azimut-" + slug);
-      const url = URL.createObjectURL(zip);
-      const a = document.createElement("a");
-      a.href = url; a.download = "azimut-" + slug + "-png.zip"; a.click();
+      const link = download(zip, "azimut-" + slug + "-png.zip");
       say(Math.round(zip.size / 1048576) + " Mo d'images PNG, à importer comme "
-          + "suite d'images à " + S.fps + " i/s. "
-          + "<a href='" + url + "' download='" + a.download + "'>Retélécharger</a>");
+          + "suite d'images à " + S.fps + " i/s. " + link);
       return;
     }
 
+    // vidéo encodée image par image : fluide quelle que soit la machine
+    const ec = await pickEncoder();
+    if (ec){
+      const r = await exportVideo(ec);
+      const link = download(r.blob, "azimut-" + slug + ".webm");
+      const speed = r.n / S.fps / r.seconds;
+      say("Vidéo encodée : " + (r.blob.size / 1048576).toFixed(1) + " Mo, "
+          + r.n + " images à " + S.fps + " i/s, en " + Math.round(r.seconds) + " s"
+          + (speed < 1 ? " (machine plus lente que le temps réel, vidéo intacte)" : "")
+          + ". " + link);
+      return;
+    }
+
+    // dernier recours : enregistrement en temps réel, tributaire de la machine
+    if (!window.MediaRecorder){
+      say("Ce navigateur ne sait pas encoder de vidéo. Choisissez « Images PNG », "
+          + "ou utilisez Chrome, Edge ou Firefox.", true);
+      return;
+    }
     const mime = pickMime();
     const stream = out.captureStream(S.fps);
     const chunks = [];
@@ -1881,27 +2085,21 @@ el("rec").addEventListener("click", async () => {
       ? { mimeType:mime, videoBitsPerSecond: videoBitrate() } : undefined);
     mr.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
     const done = new Promise(r => { mr.onstop = r; });
-
     frame(0, 0);
     el("recdot").classList.add("on");
-    say("Enregistrement en cours…");
+    say("Enregistrement en temps réel…");
     mr.start();
     await runAnimation();
     await new Promise(r => setTimeout(r, 220));
     mr.stop();
     await done;
     el("recdot").classList.remove("on");
-
     const type = mime || "video/webm";
-    const blob = new Blob(chunks, { type });
-    const ext = type.includes("mp4") ? "mp4" : "webm";
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "zoom-" + (slug || "ign") + "." + ext;
-    a.click();
-    const mo = (blob.size / 1048576).toFixed(1);
-    say("Vidéo enregistrée : " + mo + " Mo, " + Math.round(videoBitrate() / 1e6) + " Mb/s à "
-        + S.fps + " i/s. <a href='" + url + "' download='" + a.download + "'>Retélécharger</a>");
+    const link = download(new Blob(chunks, { type }),
+                          "azimut-" + slug + "." + (type.includes("mp4") ? "mp4" : "webm"));
+    say("Vidéo enregistrée en temps réel : ce navigateur ne permet pas l'encodage "
+        + "image par image, des saccades sont possibles sur une machine peu puissante. "
+        + "Pour un résultat garanti, choisissez « Images PNG ». " + link, true);
   }catch(e){
     el("recdot").classList.remove("on");
     say("L'enregistrement a échoué : " + e.message, true);

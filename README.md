@@ -72,7 +72,7 @@ Azimut interroge le géocodage inverse pour en retrouver le nom.
    une fois le départ posé.
 2. Réglez la durée, le cadre de départ et d'arrivée, le rythme.
 3. **Lancer l'animation** précharge les tuiles puis joue le plan.
-4. **Enregistrer la vidéo** rejoue le plan et télécharge un WebM.
+4. **Enregistrer la vidéo** encode le plan image par image et télécharge un WebM.
 
 ## Export
 
@@ -83,14 +83,19 @@ Azimut interroge le géocodage inverse pour en retrouver le nom.
 | Maximale | ~34 Mb/s | plan large ou très détaillé |
 | Images PNG | sans perte | master de diffusion |
 
+La vidéo est encodée **image par image** avec WebCodecs, et non enregistrée en
+temps réel. Chaque image reçoit un horodatage exact, quelle que soit la durée de
+son rendu : une machine peu puissante encode plus longtemps, mais la vidéo reste
+parfaitement fluide. Le multiplexage WebM est fait maison (SeekHead et Cues
+compris, pour que le fichier soit navigable), et validé contre ffmpeg.
+
+Sur un navigateur sans WebCodecs, Azimut retombe sur `MediaRecorder`, qui
+enregistre en temps réel : des saccades redeviennent alors possibles, et un
+avertissement le signale.
+
 Le débit est calculé à partir du format et de la cadence : un zoom plein cadre
 n'offre aucune zone statique à l'encodeur, il lui faut bien plus de bits par pixel
 qu'une scène ordinaire.
-
-La cadence par défaut est 25 i/s, celle de la diffusion française. Elle compte
-double : à débit égal, 25 i/s laisse deux fois plus de bits par image que 50,
-et laisse à l'encodeur VP9 deux fois plus de temps, celui-ci travaillant en
-temps réel dans `MediaRecorder`.
 
 Pour un master sans aucune perte, choisissez « Images PNG » : le rendu devient
 déterministe, image par image, sans contrainte de temps réel. L'archive s'importe
