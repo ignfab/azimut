@@ -107,6 +107,9 @@ body{background:var(--bg);color:var(--paper);font:15px/1.5 'Public Sans','Segoe 
   background:var(--blue);color:#fff;font:500 16px 'Public Sans',sans-serif;cursor:pointer}
 .btn:hover{background:var(--blue-hi);border-color:var(--blue-hi)}
 .btn.ghost{background:transparent;color:var(--blue-hi)}
+.btn.daily{background:var(--ochre);border-color:var(--ochre);color:#111;font-weight:700;font-size:18px;padding:14px}
+.btn.daily:hover{background:#efbd5c;border-color:#efbd5c}
+#dailySub{margin:6px 0 4px;text-align:center}
 .btn.ghost:hover{background:rgba(106,106,244,.14)}
 .row{display:flex;gap:10px;align-items:stretch;margin-top:18px}
 .row .btn{margin-top:0}
@@ -158,7 +161,7 @@ select{background:var(--panel-2);color:#fff;border:0;border-bottom:2px solid var
 <div id="hud">
   <div class="brand cond">ZOOM <span>OUT</span></div>
   <div class="mid">
-    <div class="round"><span>Manche <b id="hRound">1</b> / <b id="hTotal">5</b></span><span class="clock" id="hClock"></span><span id="hGain"></span></div>
+    <div class="round"><span id="hLabel">Manche <b>1</b> / <b>5</b></span><span class="clock" id="hClock"></span><span id="hGain"></span></div>
     <div class="bar"><i id="hBar"></i></div>
   </div>
   <div class="score cond"><span id="hScore">0</span><small>POINTS</small></div>
@@ -188,7 +191,9 @@ select{background:var(--panel-2);color:#fff;border:0;border-bottom:2px solid var
   <h1>ZOOM <span>OUT</span></h1>
   <p class="lead">On part de n'importe où en France, tout près du sol, et la vue aérienne s'éloigne sans jamais s'arrêter. Le premier qui trouve où l'on est gagne.</p>
   <p>Tapez le nom de la commune, ou cliquez sur la carte. Plus vous êtes près, et plus vous êtes rapide, plus vous marquez. Cinq manches.</p>
-  <button class="btn" id="solo">Jouer seul</button>
+  <button class="btn daily" id="daily">Le dézoom du jour</button>
+  <p class="small" id="dailySub"></p>
+  <button class="btn ghost" id="solo">Partie libre, seul</button>
   <div class="row">
     <button class="btn ghost" id="multi">Créer une partie à plusieurs</button>
     <select id="delay" aria-label="Délai avant le départ">
@@ -219,11 +224,12 @@ select{background:var(--panel-2);color:#fff;border:0;border-bottom:2px solid var
 
 <!-- fin de partie -->
 <div class="card" id="end">
-  <h2>Partie terminée</h2>
+  <h2 id="eTitle">Partie terminée</h2>
   <div class="pts" id="eTotal">0<small>pts</small></div>
   <div class="res" id="eRes"></div>
   <button class="btn" id="eShare">Copier mon résultat</button>
   <button class="btn ghost" id="eNew">Nouvelle partie</button>
+  <p class="small" id="eNext" style="text-align:center"></p>
 </div>
 
 <!-- partie expirée -->
@@ -240,7 +246,8 @@ select{background:var(--panel-2);color:#fff;border:0;border-bottom:2px solid var
 /* =======================================================================
    Règles du jeu — tout se règle ici
    ======================================================================= */
-const ROUNDS   = 5;
+const ROUNDS   = 5;         // partie libre et parties à plusieurs
+const DAILY_ROUNDS = 1;     // le dézoom du jour : un seul lieu, vite joué
 const ZOOM_T   = 45;        // secondes de dézoom par manche
 const FLY_T    = 5;         // après le dézoom : la réponse apparaît, on revient vers elle
 const PLAN_T   = 4;         // puis le plan IGN s'affiche en transparence
@@ -311,10 +318,10 @@ function rng(seed){
   };
 }
 // tirage uniforme en surface, n'importe où dans le contour
-function makeRounds(seed){
+function makeRounds(seed, n){
   const r = rng(seed), out = [];
   const s0 = Math.sin(FR_BOX.lat0 * D2R), s1 = Math.sin(FR_BOX.lat1 * D2R);
-  for (let guard = 0; out.length < ROUNDS && guard < 20000; guard++){
+  for (let guard = 0; out.length < n && guard < 20000; guard++){
     const lon = FR_BOX.lon0 + r() * (FR_BOX.lon1 - FR_BOX.lon0);
     const lat = Math.asin(s0 + r() * (s1 - s0)) / D2R;
     if (!inFrance(lon, lat)) continue;
@@ -516,7 +523,7 @@ function phase(){
   const e = Date.now() / 1000 - G.start;
   if (e < 0) return { k:"lobby", left:-e };
   const r = Math.floor(e / ROUND_T);
-  if (r >= ROUNDS) return { k:"end" };
+  if (r >= G.rounds.length) return { k:"end" };
   const w = e - r * ROUND_T;
   return w < ZOOM_T ? { k:"play", r, w, f:w / ZOOM_T }
                     : { k:"reveal", r, t:w - ZOOM_T, left:ROUND_T - w };
@@ -530,10 +537,10 @@ function plan(){
   const answer = (r, t0) => { for (let t = t0; t <= REVEAL_T; t += 0.5) need.push([revealCam(r, t), t >= FLY_T - 0.5]); };
   if (ph.k === "play"){
     ahead(ph.r, ph.w, 9);
-    if (ZOOM_T - ph.w < 14){ answer(ph.r, 0); if (ph.r + 1 < ROUNDS) ahead(ph.r + 1, 0, 6); }
+    if (ZOOM_T - ph.w < 14){ answer(ph.r, 0); if (ph.r + 1 < G.rounds.length) ahead(ph.r + 1, 0, 6); }
   } else if (ph.k === "reveal"){
     answer(ph.r, ph.t);
-    if (ph.r + 1 < ROUNDS) ahead(ph.r + 1, 0, 9);
+    if (ph.r + 1 < G.rounds.length) ahead(ph.r + 1, 0, 9);
   } else {
     need.push([overview(), false]);
     if (ph.k === "lobby") ahead(0, 0, 9);
@@ -560,21 +567,69 @@ function plan(){
 setInterval(plan, 250);
 
 /* ---------- lien et sauvegarde ---------- */
-function linkFor(g){ return location.origin + location.pathname + "#p=" + g.seed.toString(36) + "-" + g.start.toString(36); }
-function startGame(seed, start){
-  G = { seed, start, id:seed.toString(36).toUpperCase().slice(0, 5), rounds:makeRounds(seed), guesses:[] };
-  try{ const s = JSON.parse(localStorage.getItem("zoomout:" + seed + ":" + start)); if (s) G.guesses = s; }catch(e){}
+function linkFor(g){
+  if (g.day) return location.origin + location.pathname + "#d=" + g.day + "-" + g.start.toString(36);
+  return location.origin + location.pathname + "#p=" + g.seed.toString(36) + "-" + g.start.toString(36);
+}
+const shareLink = g => g.day ? location.origin + location.pathname : linkFor(g);
+function startGame(seed, start, day){
+  G = { seed, start, day:day || null, id:seed.toString(36).toUpperCase().slice(0, 5), rounds:makeRounds(seed, day ? DAILY_ROUNDS : ROUNDS), guesses:[] };
+  try{
+    const s = day ? (dailyRecord(day) || {}).guesses : JSON.parse(localStorage.getItem("zoomout:" + seed + ":" + start));
+    if (s) G.guesses = s;
+  }catch(e){}
   history.replaceState(null, "", linkFor(G));
   names.clear();
   mini.guess = null;
 }
-function save(){ try{ localStorage.setItem("zoomout:" + G.seed + ":" + G.start, JSON.stringify(G.guesses)); }catch(e){} }
+function save(){
+  try{
+    if (G.day) localStorage.setItem(dailyKey(G.day), JSON.stringify({ start:G.start, guesses:G.guesses }));
+    else localStorage.setItem("zoomout:" + G.seed + ":" + G.start, JSON.stringify(G.guesses));
+  }catch(e){}
+}
+// une seule tentative par jour : on reprend la partie commencée, ou on montre le résultat
+function playDaily(){
+  const day = parisDay(), rec = dailyRecord(day);
+  if (rec && rec.start) startGame(dailySeed(day), rec.start, day);
+  else { startGame(dailySeed(day), nowS() + 4, day); save(); }
+  last = "";
+}
 function readHash(){
+  const d = location.hash.match(/d=(\d{4}-\d{2}-\d{2})-([0-9a-z]+)/);
+  if (d){
+    // le dézoom d'un autre jour ne se rejoue pas : on renvoie vers celui d'aujourd'hui
+    if (d[1] !== parisDay()){ G = null; history.replaceState(null, "", location.pathname); return; }
+    const rec = dailyRecord(d[1]);
+    startGame(dailySeed(d[1]), rec && rec.start ? rec.start : parseInt(d[2], 36), d[1]);
+    return;
+  }
   const m = location.hash.match(/p=([0-9a-z]+)-([0-9a-z]+)/);
   if (!m){ G = null; return; }
   startGame(parseInt(m[1], 36), parseInt(m[2], 36));
 }
 const newSeed = () => (Math.random() * 2 ** 32) >>> 0;
+
+/* --- le dézoom du jour : même graine pour tout le monde, à l'heure de Paris --- */
+const DAILY_EPOCH = "2026-10-19";      // jour du n° 1
+const PARIS = new Intl.DateTimeFormat("fr-CA", { timeZone:"Europe/Paris", year:"numeric", month:"2-digit", day:"2-digit" });
+const parisDay = (d = new Date()) => PARIS.format(d);
+function dailySeed(day){
+  let x = 0x811c9dc5;                                  // FNV-1a
+  for (const c of "zoomout-jour-" + day){ x ^= c.charCodeAt(0); x = Math.imul(x, 0x01000193); }
+  return x >>> 0;
+}
+const dailyNumber = day => Math.round((Date.parse(day + "T12:00:00Z") - Date.parse(DAILY_EPOCH + "T12:00:00Z")) / 864e5) + 1;
+const dailyKey = day => "zoomout:jour:" + day;
+function dailyRecord(day){ try{ return JSON.parse(localStorage.getItem(dailyKey(day))); }catch(e){ return null; } }
+function untilParisMidnight(){
+  // secondes avant le prochain jour à Paris
+  const now = Date.now();
+  let lo = now, hi = now + 26 * 3600e3, today = parisDay(new Date(now));
+  while (hi - lo > 1000){ const mid = (lo + hi) / 2; if (parisDay(new Date(mid)) === today) lo = mid; else hi = mid; }
+  return Math.ceil((hi - now) / 1000);
+}
+const hms = s => [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((v, i) => i ? String(v).padStart(2, "0") : v).join(":");
 const nowS = () => Math.floor(Date.now() / 1000);
 
 /* =======================================================================
@@ -855,13 +910,26 @@ function onPhase(ph){
   show("scale", ph.k === "play");
   show("ask", ph.k === "play");
 
-  if (ph.k === "home") show("home", true);
+  if (ph.k === "home"){
+    const day = parisDay(), rec = dailyRecord(day), n = dailyNumber(day);
+    const over = rec && rec.start && Date.now() / 1000 - rec.start > DAILY_ROUNDS * ROUND_T;
+    $("daily").textContent = over ? "Voir mon dézoom du jour" : rec ? "Reprendre le dézoom du jour" : "Le dézoom du jour";
+    $("dailySub").textContent = "n° " + n + " — un seul lieu, le même pour tout le monde aujourd'hui, une seule tentative";
+    show("home", true);
+  }
   if (ph.k === "lobby"){ $("lId").textContent = G.id; $("lLink").value = linkFor(G); show("lobby", true); communeAt(0); }
   if (ph.k === "play"){
     const g = G.guesses[ph.r];
     mini.guess = g ? { lat:g.lat, lon:g.lon } : null;
     ans.value = ""; $("msg").textContent = "";
-    $("hRound").textContent = ph.r + 1; $("hTotal").textContent = ROUNDS;
+    const lab = $("hLabel");
+    if (G.day) lab.textContent = "Dézoom du jour n° " + dailyNumber(G.day);
+    else {
+      lab.textContent = "Manche ";
+      const b1 = document.createElement("b"), b2 = document.createElement("b");
+      b1.textContent = ph.r + 1; b2.textContent = G.rounds.length;
+      lab.append(b1, " / ", b2);
+    }
     if (!g) setTimeout(() => { if (!ans.disabled) ans.focus({ preventScroll:true }); }, 60);
     communeAt(ph.r);
   }
@@ -876,12 +944,14 @@ function onPhase(ph){
     if (!g) line.textContent = "Pas de réponse cette fois-ci.";
     else if (g.exact){ const b = document.createElement("span"); b.className = "hit"; b.textContent = "Bien vu ! "; line.append(b, "Trouvé en " + Math.round(g.t) + " s."); }
     else line.textContent = (g.label ? g.label + " : " : "Votre point est à ") + fmtKm(g.km) + ", réponse en " + Math.round(g.t) + " s.";
-    if (ph.r + 1 < ROUNDS) communeAt(ph.r + 1);
+    if (ph.r + 1 < G.rounds.length) communeAt(ph.r + 1);
     show("reveal", true);
   }
   if (ph.k === "end"){
     const played = G.guesses.some(Boolean);
-    if (!played && Date.now() / 1000 - G.start > ROUNDS * ROUND_T + 5) show("late", true);
+    $("eTitle").textContent = G.day ? "Dézoom du jour n° " + dailyNumber(G.day) : "Partie terminée";
+    $("eNew").textContent = G.day ? "Partie libre" : "Nouvelle partie";
+    if (!G.day && !played && Date.now() / 1000 - G.start > G.rounds.length * ROUND_T + 5) show("late", true);
     else {
       $("eTotal").innerHTML = total() + "<small>pts</small>";
       const box = $("eRes"); box.innerHTML = "";
@@ -901,8 +971,15 @@ function shareText(){
     const g = G.guesses[i];
     return (i + 1) + ". " + (!g ? "—" : g.exact ? "trouvé en " + Math.round(g.t) + " s" : fmtKm(g.km) + " en " + Math.round(g.t) + " s");
   });
-  return "Zoom Out · partie " + G.id + "\n" + G.rounds.map((p, i) => square(G.guesses[i])).join("")
-       + "  " + total().toLocaleString("fr-FR") + " pts\n" + lines.join("\n") + "\n" + linkFor(G);
+  if (G.day){
+    const g = G.guesses[0];
+    return "Zoom Out · dézoom du jour n° " + dailyNumber(G.day) + "\n" + square(g) + "  "
+      + (!g ? "pas trouvé" : (g.exact ? "trouvé" : fmtKm(g.km)) + " en " + Math.round(g.t) + " s — " + g.pts + " pts")
+      + "\n" + shareLink(G);
+  }
+  const head = "Zoom Out · partie " + G.id;
+  return head + "\n" + G.rounds.map((p, i) => square(G.guesses[i])).join("")
+       + "  " + total().toLocaleString("fr-FR") + " pts\n" + lines.join("\n") + "\n" + shareLink(G);
 }
 async function copy(text, btn){
   try{ await navigator.clipboard.writeText(text); }
@@ -910,6 +987,7 @@ async function copy(text, btn){
   const old = btn.textContent; btn.textContent = "Copié"; setTimeout(() => btn.textContent = old, 1400);
 }
 
+$("daily").onclick = playDaily;
 $("solo").onclick = () => { startGame(newSeed(), nowS() + 4); last = ""; };
 $("multi").onclick = () => { startGame(newSeed(), nowS() + parseInt($("delay").value, 10)); last = ""; };
 $("lCopy").onclick = () => copy($("lLink").value, $("lCopy"));
@@ -944,10 +1022,14 @@ function tick(){
     $("hBar").style.width = "100%";
     $("hGain").textContent = "";
     $("hClock").textContent = "";
-    $("rNext").textContent = (ph.r + 1 < ROUNDS ? "Manche suivante dans " : "Résultats dans ") + Math.ceil(ph.left) + " s";
+    $("rNext").textContent = (ph.r + 1 < G.rounds.length ? "Manche suivante dans " : "Résultat dans ") + Math.ceil(ph.left) + " s";
   } else {
     cam = overview();
     if (ph.k === "lobby") $("lCount").textContent = mmss(Math.ceil(ph.left));
+    if (ph.k === "end" && G.day && Date.now() - (tick.nextAt || 0) > 500){
+      tick.nextAt = Date.now();
+      $("eNext").textContent = "Prochain dézoom du jour dans " + hms(untilParisMidnight());
+    }
   }
   if (G) $("hScore").textContent = total().toLocaleString("fr-FR");
   render(cam, planA);

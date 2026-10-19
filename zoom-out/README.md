@@ -8,7 +8,12 @@ réutilise les flux ouverts de la Géoplateforme IGN, comme Azimut.
 
 ## Jouer
 
-- **Jouer seul** lance une partie de cinq manches.
+- **Le dézoom du jour** : un seul lieu, le même pour tout le monde, renouvelé
+  chaque jour à minuit, heure de Paris. Moins d'une minute de jeu. Une seule tentative : une partie
+  commencée reprend là où elle en était si on recharge la page, et une partie
+  finie affiche son résultat jusqu'au lendemain. Chaque jour porte un numéro
+  (n° 1 le 19 octobre 2026), pour comparer ses scores.
+- **Partie libre, seul** lance une partie de cinq manches tirées au hasard.
 - **Créer une partie à plusieurs** fixe un départ dans 30 s, 1 min ou 2 min, et
   donne un lien à envoyer aux collègues.
 
@@ -65,12 +70,26 @@ Zoom Out · partie P1GR0
 
 Le temps de chaque manche départage le « premier qui trouve ».
 
+Le résultat du dézoom du jour tient en une ligne :
+
+```
+Zoom Out · dézoom du jour n° 12
+🟩  3,2 km en 9 s — 800 pts
+https://ignfab.github.io/azimut/zoom-out/
+```
+
+Son lien renvoie
+simplement vers la page du jeu, puisque tout le monde a les mêmes lieux ce
+jour-là. Le tirage du jour vient d'un hachage de la date, sans serveur. Le code
+étant public, un curieux pourrait calculer les lieux à l'avance : c'est un jeu
+entre collègues, pas un concours doté.
+
 Une partie terminée peut être rejouée plus tard avec les mêmes lieux, pour qui
 n'était pas là.
 
 ## Réglages
 
-Tout est en tête de script : nombre de manches, durées du dézoom et de la
+Tout est en tête de script : nombre de manches (`ROUNDS`, et `DAILY_ROUNDS` pour le dézoom du jour), durées du dézoom et de la
 réponse, largeur de départ et d'arrivée, transparence du plan, écart minimal
 entre deux lieux, et barème (`scoreOf`).
 
