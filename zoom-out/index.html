@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zoom Out — où sommes-nous ?</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='27' cy='27' r='17' fill='none' stroke='%236a6af4' stroke-width='6'/%3E%3Cpath d='M39 39l14 14' stroke='%236a6af4' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M19 27h16' stroke='%23e2a83c' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Public+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f0f0f; --panel:#1b1b1b; --panel-2:#262626; --line:#3a3a3a;
+  --paper:#fff; --dim:#cecece; --mute:#929292;
+  --blue:#6a6af4; --blue-hi:#8b8bf7; --ochre:#e2a83c; --focus:#0a76f6; --ok:#58b77a;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden}
+body{background:var(--bg);color:var(--paper);font:15px/1.5 'Public Sans','Segoe UI',system-ui,sans-serif}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.cond{font-family:'Barlow Condensed','Public Sans',sans-serif}
+
+#map,#ovl{position:fixed;inset:0;width:100%;height:100%;display:block}
+#ovl{pointer-events:none}
+
+/* ---------- bandeau ---------- */
+#hud{position:fixed;top:0;left:0;right:0;display:none;align-items:center;gap:18px;
+  padding:14px 20px;background:linear-gradient(rgba(10,10,10,.82),rgba(10,10,10,0));pointer-events:none}
+#hud.on{display:flex}
+#hud .brand{font-size:24px;font-weight:700;letter-spacing:.06em}
+#hud .brand span{color:var(--blue-hi)}
+#hud .mid{flex:1;max-width:520px;margin:0 auto}
+#hud .round span{flex:1}
+#hud .round span:last-child{text-align:right}
+#hud .clock{text-align:center;color:#fff;font-weight:700;font-variant-numeric:tabular-nums;transition:color .3s}
+#hud .clock.low{color:#ff7a59}
+#hud .round{font-size:14px;color:var(--dim);display:flex;justify-content:space-between}
+#hud .round b{color:#fff}
+.bar{height:5px;background:rgba(255,255,255,.18);margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--ochre)}
+#hud .score{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;text-align:right;line-height:1}
+#hud .score small{display:block;font:500 12px 'Public Sans',sans-serif;color:var(--dim);letter-spacing:.04em}
+
+#scale{position:fixed;left:20px;bottom:38px;font-size:13px;color:#fff;
+  text-shadow:0 1px 4px rgba(0,0,0,.9);display:none;font-variant-numeric:tabular-nums}
+#scale.on{display:block}
+#credit{position:fixed;left:20px;bottom:14px;font-size:12px;color:rgba(255,255,255,.75);
+  text-shadow:0 1px 4px rgba(0,0,0,.9)}
+
+/* ---------- panneau de réponse ---------- */
+#guess{position:fixed;right:18px;bottom:18px;width:320px;display:none;
+  background:var(--panel);border:1px solid var(--line);box-shadow:0 14px 40px rgba(0,0,0,.6);
+  transition:width .18s ease}
+#guess.on{display:block}
+#guess.big,#guess:hover,#guess:focus-within{width:min(560px,calc(100vw - 36px))}
+/* ---------- barre de réponse, au centre ---------- */
+#ask{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);
+  width:min(600px,calc(100vw - 36px));display:none}
+#ask.on{display:block}
+#ask .field{display:flex;align-items:center;height:62px;
+  background:rgba(18,18,18,.9);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border:2px solid rgba(255,255,255,.22);box-shadow:0 18px 50px rgba(0,0,0,.55);
+  transition:border-color .15s, box-shadow .15s}
+#ask .field:focus-within{border-color:var(--blue-hi);
+  box-shadow:0 18px 50px rgba(0,0,0,.55),0 0 0 4px rgba(106,106,244,.28)}
+#ask svg{width:24px;height:24px;margin:0 4px 0 18px;flex:none;fill:none;stroke:var(--dim);
+  stroke-width:2.2;stroke-linecap:round}
+#ans{flex:1;min-width:0;height:100%;border:0;background:transparent;color:#fff;
+  padding:0 12px;font:500 21px 'Public Sans',sans-serif;outline:none}
+#ans::placeholder{color:#a8a8a8;font-weight:400}
+#ans:disabled{color:var(--dim)}
+#send{flex:none;height:100%;border:0;padding:0 22px;background:var(--blue);color:#fff;
+  font:500 16px 'Public Sans',sans-serif;cursor:pointer}
+#send:hover:not(:disabled){background:var(--blue-hi)}
+#send:disabled{background:transparent;color:var(--mute);cursor:default}
+#ask .hint{text-align:center;font-size:13px;color:rgba(255,255,255,.82);margin-top:8px;
+  text-shadow:0 1px 4px rgba(0,0,0,.9)}
+#ask.done .field{border-color:var(--ok)}
+#sugg{position:absolute;left:0;right:0;bottom:calc(100% - 22px);margin:0 0 30px;padding:0;list-style:none;
+  background:rgba(22,22,22,.96);border:1px solid var(--line);display:none;
+  box-shadow:0 14px 40px rgba(0,0,0,.5)}
+#sugg.on{display:block}
+#sugg li{padding:11px 18px;cursor:pointer;font-size:17px}
+#sugg li:hover,#sugg li.sel{background:var(--panel-2)}
+#sugg li i{font-style:normal;color:var(--mute);margin-left:8px;font-size:14px}
+#msg{font-size:14px;color:#ff8a80;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,.9)}
+#msg:not(:empty){margin-top:8px}
+#guess canvas{display:block;width:100%;aspect-ratio:1.1;cursor:crosshair;background:#a9c7da}
+#guess.locked canvas{cursor:default}
+#go{width:100%;border:0;padding:11px;font:500 15px 'Public Sans',sans-serif;
+  background:var(--blue);color:#fff;cursor:pointer}
+#go:disabled{background:var(--panel-2);color:var(--mute);cursor:default}
+#go:not(:disabled):hover{background:var(--blue-hi)}
+
+/* ---------- fenêtres ---------- */
+.card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:min(460px,calc(100vw - 32px));background:rgba(22,22,22,.96);
+  border-top:4px solid var(--blue);padding:28px 30px 26px;display:none;
+  box-shadow:0 24px 70px rgba(0,0,0,.7)}
+.card.on{display:block}
+.card h1{margin:0;font:700 46px/1 'Barlow Condensed',sans-serif;letter-spacing:.06em}
+.card h1 span{color:var(--blue-hi)}
+.card h2{margin:0 0 4px;font:700 30px/1.1 'Barlow Condensed',sans-serif;letter-spacing:.02em}
+.card p{margin:12px 0 0;color:var(--dim)}
+.card .lead{font-size:16px;color:#fff}
+.btn{display:block;width:100%;margin-top:12px;padding:12px;border:1px solid var(--blue);
+  background:var(--blue);color:#fff;font:500 16px 'Public Sans',sans-serif;cursor:pointer}
+.btn:hover{background:var(--blue-hi);border-color:var(--blue-hi)}
+.btn.ghost{background:transparent;color:var(--blue-hi)}
+.btn.ghost:hover{background:rgba(106,106,244,.14)}
+.row{display:flex;gap:10px;align-items:stretch;margin-top:18px}
+.row .btn{margin-top:0}
+select{background:var(--panel-2);color:#fff;border:0;border-bottom:2px solid var(--mute);
+  padding:0 30px 0 12px;font:15px 'Public Sans',sans-serif;appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,#fff 50%),linear-gradient(135deg,#fff 50%,transparent 50%);
+  background-position:calc(100% - 16px) 54%,calc(100% - 11px) 54%;background-size:5px 5px;background-repeat:no-repeat}
+.link{display:flex;margin-top:16px}
+.link input{flex:1;min-width:0;background:var(--panel-2);color:#fff;border:0;
+  border-bottom:2px solid var(--mute);padding:10px 12px;font:14px 'Public Sans',sans-serif}
+.link button{border:0;background:var(--blue);color:#fff;padding:0 16px;font:500 14px 'Public Sans',sans-serif;cursor:pointer}
+.big-num{font:700 84px/1 'Barlow Condensed',sans-serif;color:var(--blue-hi);
+  font-variant-numeric:tabular-nums;margin-top:14px}
+.small{font-size:13px;color:var(--mute)}
+.res{display:grid;grid-template-columns:auto 1fr auto;gap:4px 14px;margin-top:16px;
+  font-variant-numeric:tabular-nums}
+.res span:nth-child(3n){text-align:right;font-weight:700}
+.pts{font:700 54px/1 'Barlow Condensed',sans-serif;color:var(--ochre);margin-top:10px}
+.pts small{font-size:22px;color:var(--dim);margin-left:4px}
+.answer{font-size:22px;font-weight:700;margin-top:4px}
+.hit{color:var(--ok);font-weight:700}
+
+#reveal{top:auto;bottom:24px;transform:translateX(-50%);border-top-color:var(--ochre);
+  width:min(420px,calc(100vw - 32px));padding:18px 24px 18px}
+#reveal .pts{font-size:42px;margin-top:6px}
+#reveal p{margin-top:6px}
+/* la barre ne passe jamais sous la petite carte */
+@media (max-width:1260px){
+  #ask{left:18px;right:356px;width:auto;transform:none;bottom:70px}
+}
+@media (max-width:760px){
+  #ask{left:18px;right:18px;bottom:52px}
+  #ask .hint{display:none}
+  #ask .field{height:54px}
+  #ans{font-size:18px}
+  #scale{display:none !important}
+  #guess{bottom:auto;top:70px}
+  #guess:not(:hover) canvas{aspect-ratio:2}
+  #reveal{bottom:auto;top:76px}
+  #guess{width:calc(100vw - 36px)}
+  #hud .brand{display:none}
+}
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<canvas id="ovl"></canvas>
+
+<div id="hud">
+  <div class="brand cond">ZOOM <span>OUT</span></div>
+  <div class="mid">
+    <div class="round"><span>Manche <b id="hRound">1</b> / <b id="hTotal">5</b></span><span class="clock" id="hClock"></span><span id="hGain"></span></div>
+    <div class="bar"><i id="hBar"></i></div>
+  </div>
+  <div class="score cond"><span id="hScore">0</span><small>POINTS</small></div>
+</div>
+
+<div id="scale"></div>
+<div id="credit">Photographies aériennes et plan © IGN — Géoplateforme</div>
+
+<div id="ask">
+  <ul id="sugg"></ul>
+  <div class="field">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
+    <input id="ans" placeholder="Où sommes-nous ? Tapez une commune…" autocomplete="off" spellcheck="false" aria-label="Votre réponse : nom de la commune">
+    <button id="send" disabled>Valider</button>
+  </div>
+  <div id="msg"></div>
+  <div class="hint">Commencez à taper n'importe quand — ou cliquez directement sur la carte en bas à droite</div>
+</div>
+
+<div id="guess">
+  <canvas id="mini" aria-label="Carte de France : cliquez pour répondre"></canvas>
+  <button id="go" disabled>Cliquez sur la carte pour répondre</button>
+</div>
+
+<!-- accueil -->
+<div class="card" id="home">
+  <h1>ZOOM <span>OUT</span></h1>
+  <p class="lead">On part du toit d'une maison n'importe où en France, et la vue aérienne s'éloigne lentement. Le premier qui trouve où l'on est gagne.</p>
+  <p>Tapez le nom de la commune, ou cliquez sur la carte. Plus vous êtes près, et plus vous êtes rapide, plus vous marquez. Cinq manches.</p>
+  <button class="btn" id="solo">Jouer seul</button>
+  <div class="row">
+    <button class="btn ghost" id="multi">Créer une partie à plusieurs</button>
+    <select id="delay" aria-label="Délai avant le départ">
+      <option value="30">dans 30 s</option>
+      <option value="60" selected>dans 1 min</option>
+      <option value="120">dans 2 min</option>
+    </select>
+  </div>
+</div>
+
+<!-- salle d'attente -->
+<div class="card" id="lobby">
+  <h2>Partie <span id="lId"></span></h2>
+  <p>Envoyez ce lien à vos collègues. Tout le monde verra les mêmes lieux, au même moment.</p>
+  <div class="link"><input id="lLink" readonly><button id="lCopy">Copier</button></div>
+  <div class="big-num" id="lCount">0:00</div>
+  <p class="small">avant le départ de la première manche</p>
+</div>
+
+<!-- fin de manche -->
+<div class="card" id="reveal">
+  <div class="small">C'était</div>
+  <div class="answer" id="rWhere">…</div>
+  <div class="pts" id="rPts">0<small>pts</small></div>
+  <p id="rLine"></p>
+  <p class="small" id="rNext"></p>
+</div>
+
+<!-- fin de partie -->
+<div class="card" id="end">
+  <h2>Partie terminée</h2>
+  <div class="pts" id="eTotal">0<small>pts</small></div>
+  <div class="res" id="eRes"></div>
+  <button class="btn" id="eShare">Copier mon résultat</button>
+  <button class="btn ghost" id="eNew">Nouvelle partie</button>
+</div>
+
+<!-- partie expirée -->
+<div class="card" id="late">
+  <h2>Cette partie est terminée</h2>
+  <p>Vous pouvez la rejouer maintenant, avec les mêmes lieux, pour comparer vos scores à ceux des autres.</p>
+  <button class="btn" id="lateReplay">La rejouer maintenant</button>
+  <button class="btn ghost" id="lateNew">Nouvelle partie</button>
+</div>
+
+<script>
+"use strict";
+
+/* =======================================================================
+   Règles du jeu — tout se règle ici
+   ======================================================================= */
+const ROUNDS   = 5;
+const ZOOM_T   = 45;        // secondes de dézoom par manche
+const FLY_T    = 5;         // après le dézoom : la réponse apparaît, on revient vers elle
+const PLAN_T   = 4;         // puis le plan IGN s'affiche en transparence
+const REVEAL_T = FLY_T + PLAN_T;
+const ROUND_T  = ZOOM_T + REVEAL_T;
+const START_M  = 250;       // largeur au sol au départ, en mètres (plancher)
+const END_M    = 1150e3;    // largeur au sol à la fin : la France entière
+const ANSWER_M = 45e3;      // largeur au sol sur laquelle on montre la réponse
+const PLAN_ALPHA = 0.62;    // transparence du plan IGN posé sur la photo
+const MIN_GAP_KM = 120;     // écart minimal entre deux lieux d'une même partie
+
+// points : 1000 au maximum, la distance et le temps les érodent
+function scoreOf(km, f){
+  return Math.round(1000 * Math.exp(-km / 40) * (1 - 0.75 * f));
+}
+
+/* Contour de la France métropolitaine (continent, Corse), issu d'ADMIN EXPRESS
+   (IGN), simplifié et rentré de 1,5 km vers l'intérieur : un départ ne tombe
+   jamais en mer, dans un grand lac ni à l'étranger.                                              */
+const FR_POLY = [[[8.594,42.368],[8.623,42.379],[8.63,42.406],[8.651,42.4],[8.673,42.41],[8.698,42.466],[8.685,42.501],[8.734,42.517],[8.74,42.551],[8.795,42.546],[8.82,42.564],[8.829,42.588],[8.878,42.597],[8.896,42.614],[9.016,42.627],[9.068,42.648],[9.078,42.68],[9.118,42.711],[9.163,42.722],[9.215,42.716],[9.277,42.663],[9.314,42.669],[9.363,42.734],[9.36,42.798],[9.333,42.835],[9.359,42.864],[9.345,42.895],[9.38,42.923],[9.362,42.991],[9.426,42.989],[9.438,42.98],[9.433,42.96],[9.473,42.803],[9.449,42.764],[9.428,42.672],[9.515,42.545],[9.524,42.428],[9.514,42.371],[9.541,42.281],[9.537,42.125],[9.396,41.959],[9.379,41.875],[9.382,41.703],[9.355,41.684],[9.361,41.654],[9.339,41.649],[9.328,41.635],[9.298,41.639],[9.264,41.602],[9.268,41.583],[9.29,41.572],[9.325,41.588],[9.332,41.582],[9.258,41.537],[9.25,41.5],[9.265,41.485],[9.208,41.448],[9.198,41.412],[9.216,41.392],[9.204,41.381],[9.124,41.413],[9.139,41.446],[9.09,41.463],[9.09,41.488],[9.05,41.48],[8.934,41.509],[8.873,41.538],[8.864,41.558],[8.819,41.567],[8.805,41.596],[8.81,41.617],[8.883,41.636],[8.897,41.659],[8.932,41.675],[8.934,41.69],[8.919,41.704],[8.8,41.725],[8.801,41.74],[8.782,41.754],[8.719,41.747],[8.758,41.795],[8.789,41.808],[8.808,41.853],[8.804,41.875],[8.821,41.895],[8.782,41.939],[8.741,41.946],[8.711,41.922],[8.672,41.919],[8.64,41.923],[8.625,41.953],[8.677,41.968],[8.688,41.988],[8.677,42.005],[8.751,42.03],[8.765,42.049],[8.712,42.122],[8.689,42.129],[8.669,42.121],[8.605,42.156],[8.592,42.231],[8.694,42.25],[8.711,42.268],[8.687,42.304],[8.64,42.322],[8.641,42.349],[8.594,42.368]],[[-4.748,48.344],[-4.726,48.369],[-4.768,48.419],[-4.753,48.451],[-4.699,48.474],[-4.71,48.488],[-4.754,48.494],[-4.729,48.536],[-4.63,48.562],[-4.596,48.541],[-4.562,48.546],[-4.495,48.534],[-4.493,48.56],[-4.468,48.561],[-4.459,48.576],[-4.487,48.6],[-4.507,48.603],[-4.531,48.613],[-4.526,48.615],[-4.499,48.608],[-4.39,48.624],[-4.382,48.646],[-4.347,48.661],[-4.332,48.629],[-4.292,48.62],[-4.261,48.637],[-4.187,48.64],[-4.175,48.653],[-4.186,48.666],[-4.13,48.68],[-4.088,48.676],[-4.052,48.658],[-4.029,48.693],[-4.009,48.7],[-3.996,48.699],[-3.991,48.67],[-3.973,48.66],[-3.976,48.614],[-3.953,48.591],[-3.933,48.585],[-3.916,48.593],[-3.93,48.628],[-3.92,48.646],[-3.878,48.623],[-3.883,48.595],[-3.847,48.594],[-3.835,48.614],[-3.796,48.627],[-3.804,48.639],[-3.833,48.647],[-3.825,48.688],[-3.735,48.693],[-3.71,48.678],[-3.671,48.674],[-3.679,48.657],[-3.661,48.646],[-3.624,48.66],[-3.593,48.655],[-3.559,48.665],[-3.547,48.683],[-3.561,48.713],[-3.538,48.72],[-3.529,48.743],[-3.562,48.774],[-3.503,48.811],[-3.481,48.813],[-3.454,48.788],[-3.426,48.784],[-3.382,48.79],[-3.315,48.823],[-3.261,48.821],[-3.239,48.835],[-3.227,48.819],[-3.256,48.785],[-3.217,48.77],[-3.172,48.828],[-3.113,48.852],[-3.107,48.821],[-3.143,48.776],[-3.14,48.752],[-3.118,48.745],[-3.09,48.756],[-3.067,48.804],[-3.048,48.802],[-3.064,48.793],[-3.063,48.778],[-3.024,48.754],[-2.961,48.749],[-2.962,48.713],[-2.847,48.644],[-2.839,48.588],[-2.745,48.547],[-2.735,48.518],[-2.684,48.478],[-2.66,48.485],[-2.655,48.511],[-2.616,48.516],[-2.612,48.532],[-2.537,48.583],[-2.466,48.608],[-2.447,48.635],[-2.411,48.62],[-2.321,48.659],[-2.353,48.613],[-2.312,48.597],[-2.269,48.622],[-2.217,48.559],[-2.153,48.569],[-2.138,48.592],[-2.105,48.599],[-2.117,48.623],[-2.075,48.623],[-2.003,48.535],[-2.022,48.492],[-2.003,48.478],[-1.973,48.486],[-1.928,48.519],[-1.947,48.564],[-1.934,48.577],[-1.943,48.598],[-1.977,48.607],[-2.0,48.642],[-1.964,48.667],[-1.919,48.678],[-1.865,48.683],[-1.892,48.649],[-1.877,48.62],[-1.849,48.602],[-1.77,48.589],[-1.542,48.617],[-1.509,48.6],[-1.441,48.611],[-1.403,48.628],[-1.342,48.619],[-1.333,48.637],[-1.371,48.664],[-1.354,48.686],[-1.362,48.7],[-1.387,48.702],[-1.436,48.68],[-1.49,48.7],[-1.513,48.738],[-1.553,48.751],[-1.548,48.805],[-1.57,48.839],[-1.553,48.88],[-1.53,48.895],[-1.534,49.016],[-1.503,49.005],[-1.485,49.021],[-1.494,49.036],[-1.536,49.054],[-1.58,49.044],[-1.589,49.103],[-1.561,49.133],[-1.586,49.198],[-1.548,49.225],[-1.58,49.247],[-1.616,49.251],[-1.633,49.244],[-1.638,49.287],[-1.682,49.315],[-1.656,49.324],[-1.659,49.341],[-1.716,49.343],[-1.744,49.383],[-1.769,49.393],[-1.796,49.389],[-1.829,49.508],[-1.865,49.528],[-1.819,49.574],[-1.83,49.636],[-1.858,49.667],[-1.917,49.683],[-1.923,49.711],[-1.896,49.694],[-1.855,49.7],[-1.831,49.678],[-1.725,49.664],[-1.617,49.63],[-1.512,49.645],[-1.421,49.688],[-1.373,49.693],[-1.293,49.679],[-1.254,49.626],[-1.318,49.586],[-1.326,49.536],[-1.19,49.406],[-1.196,49.358],[-1.143,49.341],[-1.104,49.34],[-1.067,49.377],[-0.95,49.382],[-0.858,49.35],[-0.758,49.336],[-0.409,49.321],[-0.227,49.268],[-0.082,49.285],[-0.001,49.31],[0.14,49.391],[0.223,49.413],[0.337,49.42],[0.36,49.429],[0.348,49.462],[0.193,49.465],[0.135,49.475],[0.087,49.516],[0.204,49.695],[0.348,49.735],[0.59,49.84],[0.696,49.858],[0.788,49.861],[0.964,49.906],[1.035,49.904],[1.204,49.956],[1.459,50.092],[1.51,50.178],[1.547,50.199],[1.59,50.173],[1.625,50.176],[1.674,50.161],[1.699,50.174],[1.678,50.222],[1.631,50.231],[1.608,50.265],[1.569,50.269],[1.559,50.281],[1.571,50.345],[1.617,50.347],[1.642,50.338],[1.662,50.351],[1.645,50.379],[1.593,50.392],[1.58,50.405],[1.599,50.513],[1.656,50.493],[1.68,50.507],[1.598,50.574],[1.583,50.697],[1.623,50.718],[1.627,50.791],[1.6,50.858],[1.655,50.868],[1.739,50.926],[1.788,50.942],[2.079,50.994],[2.129,50.978],[2.15,51.006],[2.184,50.994],[2.212,51.018],[2.268,51.031],[2.348,51.045],[2.401,51.037],[2.536,51.071],[2.554,50.999],[2.605,50.952],[2.569,50.921],[2.586,50.895],[2.579,50.844],[2.625,50.801],[2.701,50.8],[2.776,50.716],[2.815,50.702],[2.838,50.707],[2.911,50.679],[2.942,50.697],[2.965,50.736],[3.059,50.766],[3.087,50.759],[3.135,50.774],[3.189,50.704],[3.235,50.697],[3.219,50.657],[3.253,50.598],[3.271,50.518],[3.373,50.478],[3.458,50.494],[3.48,50.517],[3.477,50.49],[3.491,50.475],[3.554,50.484],[3.602,50.479],[3.648,50.433],[3.645,50.344],[3.697,50.293],[3.744,50.3],[3.757,50.335],[3.783,50.339],[3.811,50.331],[3.838,50.337],[3.885,50.314],[4.018,50.337],[4.065,50.3],[4.104,50.289],[4.121,50.247],[4.173,50.245],[4.132,50.218],[4.13,50.166],[4.106,50.134],[4.138,50.116],[4.18,50.12],[4.182,50.096],[4.208,50.073],[4.149,50.059],[4.115,50.021],[4.133,49.993],[4.122,49.972],[4.174,49.959],[4.186,49.944],[4.308,49.953],[4.449,49.924],[4.533,49.938],[4.599,49.972],[4.702,49.983],[4.715,49.995],[4.716,50.083],[4.766,50.102],[4.781,50.128],[4.82,50.142],[4.861,50.139],[4.847,50.115],[4.818,50.098],[4.82,50.08],[4.799,50.07],[4.812,50.041],[4.769,49.968],[4.777,49.948],[4.834,49.936],[4.86,49.916],[4.83,49.866],[4.848,49.827],[4.834,49.787],[4.906,49.772],[4.982,49.786],[5.004,49.768],[5.083,49.749],[5.108,49.705],[5.144,49.696],[5.155,49.682],[5.243,49.673],[5.264,49.678],[5.302,49.655],[5.284,49.631],[5.298,49.602],[5.368,49.609],[5.408,49.588],[5.423,49.546],[5.444,49.533],[5.427,49.514],[5.456,49.487],[5.482,49.485],[5.57,49.513],[5.615,49.493],[5.658,49.537],[5.739,49.525],[5.778,49.542],[5.858,49.487],[5.95,49.481],[5.971,49.44],[6.043,49.434],[6.066,49.449],[6.111,49.441],[6.183,49.493],[6.248,49.495],[6.326,49.454],[6.367,49.446],[6.423,49.459],[6.525,49.422],[6.522,49.395],[6.564,49.375],[6.544,49.36],[6.548,49.341],[6.644,49.269],[6.672,49.213],[6.701,49.202],[6.691,49.188],[6.702,49.17],[6.731,49.151],[6.779,49.154],[6.843,49.139],[6.881,49.175],[6.873,49.2],[6.895,49.195],[6.927,49.206],[7.007,49.175],[7.026,49.115],[7.045,49.101],[7.076,49.103],[7.113,49.126],[7.153,49.108],[7.177,49.114],[7.194,49.102],[7.241,49.115],[7.294,49.102],[7.335,49.131],[7.376,49.135],[7.39,49.163],[7.412,49.166],[7.431,49.151],[7.475,49.153],[7.471,49.131],[7.514,49.088],[7.555,49.068],[7.595,49.069],[7.627,49.042],[7.736,49.03],[7.799,49.047],[7.865,49.02],[7.893,49.033],[7.918,49.028],[7.939,49.036],[7.965,49.015],[8.039,49.001],[8.079,48.978],[8.177,48.964],[8.117,48.894],[8.075,48.814],[8.016,48.797],[8.003,48.772],[7.958,48.768],[7.946,48.729],[7.877,48.673],[7.821,48.647],[7.78,48.587],[7.786,48.518],[7.75,48.495],[7.714,48.401],[7.725,48.332],[7.676,48.308],[7.648,48.227],[7.558,48.124],[7.549,48.031],[7.602,47.974],[7.565,47.936],[7.563,47.901],[7.537,47.883],[7.543,47.846],[7.51,47.78],[7.528,47.732],[7.492,47.697],[7.503,47.658],[7.55,47.626],[7.568,47.591],[7.483,47.547],[7.485,47.5],[7.437,47.511],[7.417,47.505],[7.401,47.481],[7.415,47.468],[7.383,47.446],[7.329,47.455],[7.257,47.439],[7.238,47.452],[7.205,47.449],[7.199,47.466],[7.222,47.492],[7.205,47.507],[7.17,47.503],[7.128,47.517],[7.078,47.505],[7.021,47.518],[6.967,47.502],[6.973,47.461],[6.924,47.441],[6.921,47.42],[6.9,47.414],[6.865,47.378],[6.86,47.348],[6.884,47.339],[7.017,47.356],[7.032,47.342],[6.995,47.334],[6.989,47.31],[6.926,47.295],[6.925,47.243],[6.826,47.18],[6.823,47.159],[6.729,47.12],[6.721,47.105],[6.688,47.09],[6.672,47.067],[6.685,47.051],[6.645,47.036],[6.611,47.005],[6.486,46.985],[6.417,46.937],[6.418,46.916],[6.445,46.888],[6.441,46.856],[6.411,46.813],[6.432,46.781],[6.332,46.722],[6.269,46.701],[6.095,46.585],[6.094,46.569],[6.13,46.544],[6.055,46.471],[6.062,46.443],[6.045,46.414],[6.143,46.365],[6.084,46.289],[6.101,46.257],[6.057,46.259],[5.958,46.222],[5.944,46.195],[5.967,46.181],[5.937,46.133],[5.957,46.114],[5.998,46.129],[6.043,46.124],[6.067,46.137],[6.137,46.128],[6.199,46.154],[6.238,46.191],[6.308,46.215],[6.329,46.24],[6.327,46.263],[6.3,46.278],[6.271,46.267],[6.262,46.276],[6.278,46.319],[6.321,46.355],[6.39,46.327],[6.486,46.364],[6.515,46.391],[6.545,46.381],[6.716,46.394],[6.782,46.381],[6.754,46.367],[6.754,46.345],[6.84,46.277],[6.785,46.208],[6.778,46.134],[6.808,46.117],[6.874,46.11],[6.859,46.041],[6.891,46.029],[6.926,46.043],[6.936,46.038],[6.97,45.996],[6.993,45.987],[6.991,45.964],[7.019,45.931],[6.987,45.906],[6.981,45.883],[6.929,45.861],[6.876,45.862],[6.803,45.844],[6.782,45.782],[6.79,45.721],[6.833,45.681],[6.883,45.664],[6.903,45.641],[6.972,45.633],[6.959,45.586],[6.974,45.571],[6.983,45.498],[7.028,45.483],[7.04,45.461],[7.08,45.459],[7.101,45.424],[7.16,45.399],[7.14,45.365],[7.093,45.332],[7.113,45.26],[7.078,45.239],[6.999,45.233],[6.956,45.22],[6.928,45.184],[6.878,45.176],[6.86,45.146],[6.769,45.173],[6.735,45.152],[6.672,45.152],[6.656,45.135],[6.618,45.123],[6.608,45.101],[6.643,45.06],[6.66,45.01],[6.728,45.005],[6.72,44.985],[6.746,44.963],[6.725,44.938],[6.735,44.898],[6.856,44.838],[6.91,44.831],[6.939,44.845],[6.99,44.829],[6.998,44.816],[6.982,44.785],[7.001,44.77],[7.014,44.723],[7.049,44.701],[6.983,44.703],[6.949,44.687],[6.93,44.657],[6.938,44.63],[6.912,44.583],[6.866,44.564],[6.835,44.53],[6.843,44.497],[6.905,44.438],[6.875,44.425],[6.87,44.356],[6.903,44.342],[6.939,44.307],[6.943,44.287],[6.977,44.271],[6.994,44.227],[7.036,44.21],[7.074,44.216],[7.137,44.187],[7.162,44.189],[7.274,44.129],[7.329,44.13],[7.355,44.103],[7.39,44.11],[7.427,44.099],[7.446,44.115],[7.504,44.128],[7.626,44.137],[7.654,44.163],[7.649,44.127],[7.696,44.08],[7.695,44.068],[7.646,44.035],[7.65,44.001],[7.637,43.987],[7.557,43.957],[7.543,43.907],[7.502,43.896],[7.481,43.877],[7.477,43.853],[7.504,43.794],[7.472,43.772],[7.42,43.76],[7.393,43.736],[7.354,43.735],[7.295,43.709],[7.235,43.701],[7.208,43.667],[7.145,43.664],[7.12,43.642],[7.104,43.584],[7.065,43.577],[7.04,43.559],[6.984,43.562],[6.941,43.546],[6.92,43.519],[6.929,43.498],[6.904,43.459],[6.877,43.444],[6.851,43.445],[6.839,43.43],[6.789,43.426],[6.763,43.438],[6.733,43.428],[6.695,43.356],[6.66,43.346],[6.647,43.324],[6.566,43.282],[6.565,43.263],[6.579,43.251],[6.653,43.253],[6.647,43.207],[6.621,43.182],[6.603,43.197],[6.548,43.2],[6.49,43.166],[6.46,43.171],[6.359,43.148],[6.34,43.106],[6.279,43.134],[6.199,43.129],[6.165,43.115],[6.139,43.087],[6.08,43.101],[6.043,43.093],[6.012,43.117],[5.908,43.136],[5.871,43.124],[5.863,43.102],[5.879,43.089],[5.842,43.062],[5.824,43.076],[5.832,43.107],[5.823,43.123],[5.778,43.151],[5.744,43.148],[5.711,43.161],[5.695,43.192],[5.636,43.203],[5.591,43.182],[5.567,43.199],[5.563,43.217],[5.538,43.228],[5.502,43.215],[5.459,43.225],[5.366,43.222],[5.393,43.246],[5.377,43.281],[5.392,43.297],[5.366,43.342],[5.32,43.373],[5.281,43.369],[5.227,43.343],[5.044,43.345],[5.014,43.389],[5.018,43.404],[4.982,43.435],[4.933,43.447],[4.886,43.441],[4.861,43.467],[4.837,43.46],[4.835,43.443],[4.817,43.44],[4.806,43.426],[4.823,43.408],[4.811,43.371],[4.856,43.353],[4.848,43.347],[4.76,43.363],[4.662,43.36],[4.578,43.38],[4.608,43.398],[4.61,43.416],[4.591,43.443],[4.555,43.461],[4.466,43.471],[4.402,43.462],[4.2,43.479],[4.142,43.498],[4.157,43.534],[4.125,43.561],[4.057,43.571],[3.989,43.561],[3.875,43.518],[3.785,43.452],[3.714,43.427],[3.707,43.413],[3.632,43.394],[3.504,43.288],[3.402,43.301],[3.277,43.253],[3.167,43.177],[3.091,43.096],[3.024,42.961],[3.022,42.928],[3.041,42.914],[3.021,42.806],[3.022,42.72],[3.006,42.703],[3.018,42.691],[3.035,42.539],[3.049,42.524],[3.105,42.508],[3.114,42.477],[3.137,42.467],[3.142,42.448],[3.118,42.451],[3.093,42.441],[3.049,42.486],[2.973,42.483],[2.944,42.495],[2.909,42.471],[2.87,42.481],[2.831,42.471],[2.785,42.431],[2.73,42.438],[2.664,42.416],[2.634,42.389],[2.647,42.358],[2.568,42.371],[2.542,42.364],[2.529,42.347],[2.491,42.356],[2.441,42.405],[2.367,42.416],[2.321,42.44],[2.258,42.452],[2.198,42.431],[2.149,42.436],[2.116,42.422],[2.096,42.392],[2.072,42.378],[2.014,42.367],[1.983,42.386],[1.976,42.428],[1.961,42.439],[2.004,42.433],[2.028,42.441],[2.031,42.457],[2.007,42.473],[2.017,42.485],[2.009,42.497],[1.971,42.507],[1.94,42.467],[1.915,42.461],[1.831,42.499],[1.744,42.509],[1.756,42.549],[1.788,42.557],[1.805,42.575],[1.791,42.594],[1.749,42.6],[1.756,42.614],[1.744,42.629],[1.607,42.642],[1.548,42.669],[1.51,42.659],[1.468,42.663],[1.449,42.617],[1.43,42.661],[1.4,42.698],[1.374,42.709],[1.365,42.732],[1.332,42.738],[1.262,42.73],[1.228,42.741],[1.169,42.724],[1.142,42.764],[1.087,42.8],[0.993,42.802],[0.962,42.819],[0.927,42.807],[0.863,42.839],[0.806,42.854],[0.781,42.85],[0.712,42.875],[0.668,42.866],[0.641,42.841],[0.648,42.808],[0.628,42.788],[0.635,42.772],[0.624,42.754],[0.649,42.735],[0.657,42.706],[0.598,42.719],[0.577,42.71],[0.526,42.716],[0.507,42.706],[0.472,42.713],[0.43,42.705],[0.358,42.738],[0.311,42.714],[0.297,42.691],[0.27,42.727],[0.176,42.75],[0.11,42.724],[0.071,42.727],[0.052,42.712],[0.007,42.714],[-0.01,42.698],[-0.046,42.707],[-0.059,42.729],[-0.09,42.735],[-0.149,42.809],[-0.181,42.803],[-0.308,42.862],[-0.358,42.849],[-0.396,42.817],[-0.438,42.812],[-0.51,42.84],[-0.548,42.806],[-0.581,42.821],[-0.588,42.84],[-0.643,42.868],[-0.667,42.895],[-0.71,42.899],[-0.713,42.949],[-0.743,42.979],[-0.772,42.982],[-0.819,42.965],[-0.861,42.964],[-0.907,42.978],[-0.939,42.967],[-1.008,43.006],[-1.065,43.011],[-1.109,43.037],[-1.13,43.032],[-1.226,43.068],[-1.252,43.057],[-1.287,43.078],[-1.253,43.113],[-1.265,43.131],[-1.346,43.116],[-1.363,43.097],[-1.366,43.045],[-1.429,43.058],[-1.454,43.085],[-1.4,43.12],[-1.384,43.173],[-1.364,43.185],[-1.359,43.231],[-1.374,43.267],[-1.407,43.286],[-1.434,43.28],[-1.5,43.306],[-1.535,43.308],[-1.576,43.299],[-1.584,43.267],[-1.603,43.268],[-1.612,43.317],[-1.669,43.328],[-1.719,43.317],[-1.724,43.339],[-1.765,43.358],[-1.694,43.38],[-1.657,43.377],[-1.591,43.421],[-1.514,43.513],[-1.43,43.639],[-1.288,44.169],[-1.236,44.456],[-1.241,44.54],[-1.195,44.594],[-1.178,44.65],[-1.149,44.627],[-1.02,44.629],[-0.985,44.646],[-1.022,44.702],[-1.103,44.765],[-1.155,44.788],[-1.182,44.784],[-1.197,44.752],[-1.231,44.722],[-1.143,45.299],[-1.137,45.472],[-1.078,45.55],[-0.985,45.565],[-0.97,45.581],[-0.977,45.604],[-1.011,45.634],[-1.106,45.659],[-1.218,45.71],[-1.224,45.775],[-1.138,45.784],[-1.118,45.795],[-1.117,45.818],[-1.135,45.845],[-1.103,45.848],[-1.084,45.866],[-1.045,45.948],[-1.064,45.981],[-1.034,46.001],[-1.044,46.051],[-1.073,46.067],[-1.084,46.1],[-1.113,46.135],[-1.141,46.148],[-1.148,46.166],[-1.205,46.161],[-1.181,46.204],[-1.094,46.255],[-1.097,46.297],[-1.117,46.321],[-1.161,46.337],[-1.216,46.326],[-1.225,46.293],[-1.284,46.335],[-1.307,46.335],[-1.352,46.36],[-1.454,46.355],[-1.477,46.395],[-1.504,46.416],[-1.615,46.427],[-1.767,46.504],[-1.797,46.507],[-1.842,46.618],[-1.929,46.702],[-1.959,46.708],[-1.964,46.725],[-2.008,46.759],[-2.124,46.826],[-2.132,46.878],[-2.098,46.887],[-2.091,46.91],[-2.056,46.927],[-2.027,46.962],[-2.012,46.999],[-1.961,47.029],[-1.989,47.069],[-2.042,47.105],[-2.098,47.127],[-2.14,47.125],[-2.211,47.139],[-2.168,47.145],[-2.148,47.163],[-2.139,47.209],[-2.155,47.231],[-2.153,47.276],[-2.192,47.294],[-2.293,47.251],[-2.369,47.292],[-2.412,47.293],[-2.443,47.278],[-2.494,47.294],[-2.485,47.338],[-2.518,47.375],[-2.473,47.399],[-2.416,47.406],[-2.431,47.448],[-2.47,47.463],[-2.438,47.481],[-2.408,47.483],[-2.408,47.506],[-2.503,47.537],[-2.547,47.539],[-2.545,47.561],[-2.611,47.581],[-2.643,47.559],[-2.68,47.557],[-2.688,47.513],[-2.728,47.52],[-2.817,47.503],[-2.828,47.523],[-2.718,47.532],[-2.71,47.555],[-2.672,47.584],[-2.667,47.635],[-2.702,47.66],[-2.726,47.658],[-2.733,47.639],[-2.752,47.653],[-2.8,47.658],[-2.814,47.636],[-2.871,47.635],[-2.904,47.612],[-2.963,47.668],[-2.984,47.672],[-3.001,47.656],[-2.98,47.621],[-2.992,47.604],[-3.034,47.604],[-3.074,47.585],[-3.187,47.642],[-3.185,47.663],[-3.151,47.669],[-3.084,47.714],[-3.094,47.736],[-3.118,47.74],[-3.117,47.754],[-3.138,47.764],[-3.217,47.753],[-3.219,47.74],[-3.196,47.717],[-3.233,47.704],[-3.236,47.676],[-3.274,47.711],[-3.314,47.723],[-3.267,47.765],[-3.261,47.802],[-3.298,47.805],[-3.319,47.779],[-3.341,47.775],[-3.37,47.834],[-3.393,47.841],[-3.42,47.809],[-3.38,47.743],[-3.397,47.716],[-3.445,47.713],[-3.505,47.768],[-3.498,47.804],[-3.518,47.83],[-3.503,47.852],[-3.532,47.875],[-3.553,47.874],[-3.564,47.859],[-3.562,47.819],[-3.546,47.801],[-3.553,47.78],[-3.603,47.79],[-3.622,47.785],[-3.642,47.802],[-3.678,47.793],[-3.681,47.805],[-3.625,47.819],[-3.625,47.837],[-3.698,47.844],[-3.723,47.825],[-3.731,47.851],[-3.749,47.861],[-3.778,47.839],[-3.767,47.806],[-3.838,47.811],[-3.873,47.838],[-3.864,47.867],[-3.968,47.922],[-3.99,47.92],[-4.01,47.903],[-4.006,47.865],[-4.034,47.863],[-4.068,47.888],[-4.092,47.887],[-4.123,47.912],[-4.066,47.926],[-4.06,47.951],[-4.113,47.997],[-4.136,47.987],[-4.137,47.944],[-4.166,47.92],[-4.191,47.916],[-4.191,47.892],[-4.235,47.871],[-4.188,47.822],[-4.195,47.814],[-4.217,47.826],[-4.239,47.806],[-4.352,47.812],[-4.326,47.842],[-4.37,47.933],[-4.437,47.991],[-4.512,48.019],[-4.473,48.03],[-4.474,48.048],[-4.509,48.056],[-4.549,48.05],[-4.572,48.017],[-4.627,48.042],[-4.688,48.041],[-4.654,48.055],[-4.573,48.068],[-4.548,48.063],[-4.371,48.095],[-4.34,48.072],[-4.292,48.078],[-4.25,48.13],[-4.254,48.159],[-4.304,48.215],[-4.354,48.22],[-4.457,48.252],[-4.512,48.243],[-4.533,48.212],[-4.524,48.253],[-4.556,48.272],[-4.502,48.267],[-4.44,48.278],[-4.395,48.261],[-4.309,48.281],[-4.276,48.246],[-4.212,48.229],[-4.163,48.231],[-4.118,48.205],[-4.099,48.212],[-4.078,48.261],[-4.099,48.269],[-4.136,48.256],[-4.232,48.273],[-4.185,48.28],[-4.167,48.298],[-4.178,48.309],[-4.206,48.311],[-4.239,48.338],[-4.259,48.339],[-4.243,48.356],[-4.257,48.371],[-4.322,48.375],[-4.382,48.353],[-4.417,48.351],[-4.264,48.426],[-4.249,48.445],[-4.266,48.458],[-4.389,48.411],[-4.438,48.41],[-4.612,48.353],[-4.683,48.369],[-4.714,48.36],[-4.724,48.344],[-4.748,48.344]],[[4.997,43.56],[4.984,43.468],[5.001,43.457],[5.035,43.457],[5.04,43.405],[5.059,43.388],[5.145,43.388],[5.244,43.449],[5.248,43.47],[5.23,43.499],[5.201,43.505],[5.15,43.48],[5.127,43.533],[5.053,43.541],[5.028,43.569],[4.997,43.56]],[[-1.227,45.827],[-1.251,45.886],[-1.367,45.96],[-1.377,46.016],[-1.315,45.979],[-1.257,45.977],[-1.252,45.922],[-1.212,45.884],[-1.227,45.827]]];
+
+/* =======================================================================
+   Géométrie
+   ======================================================================= */
+const D2R = Math.PI / 180, EARTH = 40075016.686;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function merc(lon, lat){
+  const s = Math.sin(lat * D2R);
+  return [(lon + 180) / 360, 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)];
+}
+const unmerc = (x, y) => [x * 360 - 180, Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) / D2R];
+const groundSpan = (m, lat) => m / (EARTH * Math.cos(lat * D2R));
+function km(a, b){
+  const dLat = (b.lat - a.lat) * D2R, dLon = (b.lon - a.lon) * D2R;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * D2R) * Math.cos(b.lat * D2R) * Math.sin(dLon / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+const FR = (() => { const m = merc(2.45, 46.6); return { mx:m[0], my:m[1] }; })();
+
+function inRing(lon, lat, ring){
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++){
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+// parité : le continent et la Corse comptent une fois, un plan d'eau intérieur
+// (étang de Berre, lac du Bourget…) les annule
+const inFrance = (lon, lat) => FR_POLY.reduce((n, r) => n + inRing(lon, lat, r), 0) % 2 === 1;
+const FR_BOX = (() => {
+  let a = 180, b = 90, c = -180, d = -90;
+  for (const r of FR_POLY) for (const [x, y] of r){ a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); }
+  return { lon0:a, lat0:b, lon1:c, lat1:d };
+})();
+
+/* =======================================================================
+   Tirage déterministe : même graine, mêmes lieux, sur toutes les machines
+   ======================================================================= */
+function rng(seed){
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// tirage uniforme en surface, n'importe où dans le contour
+function makeRounds(seed){
+  const r = rng(seed), out = [];
+  const s0 = Math.sin(FR_BOX.lat0 * D2R), s1 = Math.sin(FR_BOX.lat1 * D2R);
+  for (let guard = 0; out.length < ROUNDS && guard < 20000; guard++){
+    const lon = FR_BOX.lon0 + r() * (FR_BOX.lon1 - FR_BOX.lon0);
+    const lat = Math.asin(s0 + r() * (s1 - s0)) / D2R;
+    if (!inFrance(lon, lat)) continue;
+    const p = { lat, lon };
+    if (out.some(q => km(p, q) < MIN_GAP_KM)) continue;
+    const m = merc(lon, lat);
+    out.push({ lat, lon, mx:m[0], my:m[1] });
+  }
+  return out;
+}
+
+/* =======================================================================
+   Rendu WebGL des tuiles
+   ======================================================================= */
+const cv = document.getElementById("map"), ov = document.getElementById("ovl");
+const octx = ov.getContext("2d");
+const gl = cv.getContext("webgl", { antialias:false, alpha:false });
+let W = 1, H = 1, DPR = 1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 1.25);
+  W = cv.width = ov.width = Math.round(innerWidth * DPR);
+  H = cv.height = ov.height = Math.round(innerHeight * DPR);
+  drawMini();
+}
+addEventListener("resize", resize);
+
+const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return o; };
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER, `
+attribute vec2 a;
+uniform vec4 r, uv;
+varying vec2 v;
+void main(){ v = uv.xy + vec2(a.x, 1.0 - a.y) * uv.zw; gl_Position = vec4(r.xy + a * r.zw, 0.0, 1.0); }`));
+gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, `
+precision mediump float;
+uniform sampler2D t;
+uniform float al, boost;
+varying vec2 v;
+void main(){
+  vec4 s = texture2D(t, v);
+  vec3 c = s.rgb;
+  float l = dot(c, vec3(0.299, 0.587, 0.114));
+  c = mix(c, clamp((mix(vec3(l), c, 1.15) - 0.5) * 1.05 + 0.5, 0.0, 1.0), boost);
+  gl_FragColor = vec4(c, s.a) * al;
+}`));
+gl.linkProgram(prog); gl.useProgram(prog);
+const U = { r:gl.getUniformLocation(prog, "r"), uv:gl.getUniformLocation(prog, "uv"),
+            al:gl.getUniformLocation(prog, "al"), t:gl.getUniformLocation(prog, "t"),
+            boost:gl.getUniformLocation(prog, "boost") };
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0,0, 1,0, 0,1, 0,1, 1,0, 1,1]), gl.STATIC_DRAW);
+const aLoc = gl.getAttribLocation(prog, "a");
+gl.enableVertexAttribArray(aLoc);
+gl.vertexAttribPointer(aLoc, 2, gl.FLOAT, false, 0, 0);
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+gl.uniform1i(U.t, 0);
+
+const LAYERS = {
+  ortho:{ id:"ORTHOIMAGERY.ORTHOPHOTOS", fmt:"image/jpeg", maxz:19 },
+  plan: { id:"GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2", fmt:"image/png", maxz:18 }
+};
+const MAXZ = 19, TILE_PX = 256 * 1.15;
+const tileURL = (k, z, x, y) => "https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile"
+  + "&LAYER=" + LAYERS[k].id + "&STYLE=normal&FORMAT=" + encodeURIComponent(LAYERS[k].fmt)
+  + "&TILEMATRIXSET=PM&TILEMATRIX=" + z + "&TILEROW=" + y + "&TILECOL=" + x;
+
+// niveau courant opaque, niveau suivant en fondu : le changement de résolution ne se voit pas
+function levelsAt(span, maxz){
+  const zf = Math.log2(W / (TILE_PX * span));
+  const zi = clamp(Math.floor(zf), 2, maxz), f = zf - Math.floor(zf);
+  const out = [{ z:zi, a:1 }];
+  if (zi < maxz && f > 0.45) out.push({ z:zi + 1, a:smooth(0.45, 1, f) });
+  return out;
+}
+function rangeAt(z, cam){
+  const n = 1 << z, size = 1 / n, hw = cam.span / 2, hh = cam.span * H / W / 2;
+  return { size,
+    x0:clamp(Math.floor((cam.cx - hw) / size), 0, n - 1), x1:clamp(Math.floor((cam.cx + hw) / size), 0, n - 1),
+    y0:clamp(Math.floor((cam.cy - hh) / size), 0, n - 1), y1:clamp(Math.floor((cam.cy + hh) / size), 0, n - 1) };
+}
+
+/* ---------- cache et chargement ---------- */
+const tiles = new Map();
+const key = (k, z, x, y) => k + "/" + z + "/" + x + "/" + y;
+let queue = [], active = 0;
+
+async function loadTile(t){
+  const id = key(t.k, t.z, t.x, t.y);
+  for (let a = 0; a < 3; a++){
+    const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 6000);
+    try{
+      const r = await fetch(tileURL(t.k, t.z, t.x, t.y), { signal:ac.signal });
+      clearTimeout(timer);
+      if (!r.ok){ if (r.status < 500) break; throw 0; }
+      const bmp = await createImageBitmap(await r.blob());
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
+      for (const p of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, p, gl.LINEAR);
+      for (const p of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, p, gl.CLAMP_TO_EDGE);
+      bmp.close && bmp.close();
+      tiles.set(id, { tex });
+      return;
+    }catch(e){
+      clearTimeout(timer);
+      await new Promise(r => setTimeout(r, 300 * (a + 1)));
+    }
+  }
+  tiles.set(id, { failed:true });
+}
+function pump(){
+  while (active < 8 && queue.length){
+    const t = queue.shift(), id = key(t.k, t.z, t.x, t.y);
+    if (tiles.has(id)) continue;
+    tiles.set(id, { pending:true });
+    active++;
+    loadTile(t).finally(() => { active--; pump(); });
+  }
+}
+const texOf = (k, z, x, y) => { const t = tiles.get(key(k, z, x, y)); return t && t.tex; };
+
+function quad(cam, z, x, y, tex, ox, oy, sc){
+  const size = 1 / (1 << z), hx = cam.span / 2, hy = cam.span * H / W / 2;
+  // conversion en double précision côté JS : seul le rectangle final part au GPU
+  const ax = (x * size - cam.cx) / hx, bx = ((x + 1) * size - cam.cx) / hx;
+  const ay = -(y * size - cam.cy) / hy, by = -((y + 1) * size - cam.cy) / hy;
+  gl.uniform4f(U.r, ax, by, bx - ax, ay - by);
+  gl.uniform4f(U.uv, ox, oy, sc, sc);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+}
+
+/* Une tuile absente n'ouvre jamais de trou : on pose dessous un quartier de sa
+   parente, puis par-dessus celles de ses quatre filles qui sont disponibles.
+   La photo aérienne a quelques trous aux petites échelles ; on ne les comble
+   jamais avec le plan.                                                       */
+function drawTile(cam, k, z, x, y, base){
+  const t = texOf(k, z, x, y);
+  if (t){ quad(cam, z, x, y, t, 0, 0, 1); return; }
+  if (!base) return;
+  for (let d = 1; d <= 5 && z - d >= 0; d++){
+    const pz = z - d, px = x >> d, py = y >> d, p = texOf(k, pz, px, py);
+    if (p){ const sc = 1 / (1 << d); quad(cam, z, x, y, p, (x - (px << d)) * sc, (y - (py << d)) * sc, sc); break; }
+  }
+  if (z < LAYERS[k].maxz)
+    for (let i = 0; i < 4; i++){
+      const cx = 2 * x + (i & 1), cy = 2 * y + (i >> 1), c = texOf(k, z + 1, cx, cy);
+      if (c) quad(cam, z + 1, cx, cy, c, 0, 0, 1);
+    }
+}
+
+function drawLayer(cam, k, alpha){
+  for (const lv of levelsAt(cam.span, LAYERS[k].maxz)){
+    const r = rangeAt(lv.z, cam);
+    gl.uniform1f(U.al, lv.a * alpha);
+    for (let x = r.x0; x <= r.x1; x++) for (let y = r.y0; y <= r.y1; y++) drawTile(cam, k, lv.z, x, y, lv.a === 1);
+  }
+}
+
+function render(cam, planAlpha){
+  gl.viewport(0, 0, W, H);
+  gl.clearColor(0.06, 0.06, 0.06, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.uniform1f(U.boost, 1);
+  drawLayer(cam, "ortho", 1);
+  if (planAlpha > 0.001){ gl.uniform1f(U.boost, 0); drawLayer(cam, "plan", planAlpha); }
+}
+
+/* =======================================================================
+   Partie : tout découle de la graine et de l'heure de départ
+   ======================================================================= */
+let G = null;          // { seed, start, id, rounds, guesses }
+
+function endSpan(){
+  // la France entière tient dans l'écran, quelle que soit sa forme
+  return Math.max(groundSpan(END_M, 46.6), groundSpan(1050e3, 46.6) * W / H);
+}
+function camFor(r, w){
+  const p = G.rounds[r], f = clamp(w / ZOOM_T, 0, 1);
+  // au départ, le niveau le plus fin ne doit pas être agrandi plus de 1,3 fois
+  const s0 = Math.max(groundSpan(START_M, p.lat), W / (256 * 1.3 * Math.pow(2, MAXZ)));
+  const s1 = endSpan();
+  // le point à découvrir reste au centre exact de l'écran, du début à la fin
+  return { cx:p.mx, cy:p.my, span:s0 * Math.pow(s1 / s0, f) };
+}
+// après le dézoom : on redescend vers la réponse
+function revealCam(r, t){
+  const a = camFor(r, ZOOM_T), p = G.rounds[r];
+  const k = smooth(1.0, FLY_T - 0.3, t), s1 = groundSpan(ANSWER_M, p.lat);
+  return { cx:a.cx + (p.mx - a.cx) * k, cy:a.cy + (p.my - a.cy) * k, span:a.span * Math.pow(s1 / a.span, k) };
+}
+const planAlphaAt = t => PLAN_ALPHA * smooth(FLY_T, FLY_T + 0.8, t);
+const overview = () => ({ cx:FR.mx, cy:FR.my, span:endSpan() });
+
+function phase(){
+  if (!G) return { k:"home" };
+  const e = Date.now() / 1000 - G.start;
+  if (e < 0) return { k:"lobby", left:-e };
+  const r = Math.floor(e / ROUND_T);
+  if (r >= ROUNDS) return { k:"end" };
+  const w = e - r * ROUND_T;
+  return w < ZOOM_T ? { k:"play", r, w, f:w / ZOOM_T }
+                    : { k:"reveal", r, t:w - ZOOM_T, left:ROUND_T - w };
+}
+
+// tuiles à précharger : la suite de ce qu'on regarde, la réponse, et le début de la manche suivante
+function plan(){
+  if (!W) return;
+  const ph = phase(), need = [];       // [cam, avec le plan ?]
+  const ahead = (r, w0, dur) => { for (let w = w0; w <= Math.min(ZOOM_T, w0 + dur); w += 0.5) need.push([camFor(r, w), false]); };
+  const answer = (r, t0) => { for (let t = t0; t <= REVEAL_T; t += 0.5) need.push([revealCam(r, t), t >= FLY_T - 0.5]); };
+  if (ph.k === "play"){
+    ahead(ph.r, ph.w, 9);
+    if (ZOOM_T - ph.w < 14){ answer(ph.r, 0); if (ph.r + 1 < ROUNDS) ahead(ph.r + 1, 0, 6); }
+  } else if (ph.k === "reveal"){
+    answer(ph.r, ph.t);
+    if (ph.r + 1 < ROUNDS) ahead(ph.r + 1, 0, 9);
+  } else {
+    need.push([overview(), false]);
+    if (ph.k === "lobby") ahead(0, 0, 9);
+  }
+  const seen = new Set(), list = [];
+  const add = (k, z, x, y) => {
+    const id = key(k, z, x, y);
+    if (seen.has(id)) return;
+    seen.add(id);
+    const t = tiles.get(id);
+    if (!t) list.push({ k, z, x, y });
+    else if (t.failed && k === "ortho" && z < LAYERS.ortho.maxz)    // trou : on va chercher les filles
+      for (let i = 0; i < 4; i++) add(k, z + 1, 2 * x + (i & 1), 2 * y + (i >> 1));
+  };
+  for (const [c, withPlan] of need)
+    for (const k of withPlan ? ["ortho", "plan"] : ["ortho"])
+      for (const lv of levelsAt(c.span, LAYERS[k].maxz)){
+        const r = rangeAt(lv.z, c);
+        for (let x = r.x0; x <= r.x1; x++) for (let y = r.y0; y <= r.y1; y++) add(k, lv.z, x, y);
+      }
+  queue = list;
+  pump();
+}
+setInterval(plan, 250);
+
+/* ---------- lien et sauvegarde ---------- */
+function linkFor(g){ return location.origin + location.pathname + "#p=" + g.seed.toString(36) + "-" + g.start.toString(36); }
+function startGame(seed, start){
+  G = { seed, start, id:seed.toString(36).toUpperCase().slice(0, 5), rounds:makeRounds(seed), guesses:[] };
+  try{ const s = JSON.parse(localStorage.getItem("zoomout:" + seed + ":" + start)); if (s) G.guesses = s; }catch(e){}
+  history.replaceState(null, "", linkFor(G));
+  names.clear();
+  mini.guess = null;
+}
+function save(){ try{ localStorage.setItem("zoomout:" + G.seed + ":" + G.start, JSON.stringify(G.guesses)); }catch(e){} }
+function readHash(){
+  const m = location.hash.match(/p=([0-9a-z]+)-([0-9a-z]+)/);
+  if (!m){ G = null; return; }
+  startGame(parseInt(m[1], 36), parseInt(m[2], 36));
+}
+const newSeed = () => (Math.random() * 2 ** 32) >>> 0;
+const nowS = () => Math.floor(Date.now() / 1000);
+
+/* =======================================================================
+   Communes : nom de la réponse, recherche de ce que tape le joueur
+   ======================================================================= */
+const names = new Map();     // manche -> Promise<{ nom, dep }>
+function communeAt(r){
+  if (names.has(r)) return names.get(r);
+  const p = G.rounds[r];
+  const job = (async () => {
+    // commune qui contient le point (contours officiels)
+    try{
+      const res = await fetch("https://geo.api.gouv.fr/communes?lat=" + p.lat.toFixed(6) + "&lon=" + p.lon.toFixed(6)
+                              + "&fields=nom,departement&format=json");
+      const c = (await res.json())[0];
+      if (c) return { nom:c.nom, dep:c.departement ? c.departement.nom : "" };
+    }catch(e){}
+    // repli : adresse la plus proche, par le géocodeur de la Géoplateforme
+    try{
+      const res = await fetch("https://data.geopf.fr/geocodage/reverse?index=address&limit=1&lon="
+                              + p.lon.toFixed(6) + "&lat=" + p.lat.toFixed(6));
+      const q = ((await res.json()).features[0] || {}).properties;
+      if (q && q.city) return { nom:q.city, dep:(q.context || "").split(",")[1] ? q.context.split(",")[1].trim() : "" };
+    }catch(e){}
+    return null;
+  })();
+  names.set(r, job);
+  return job;
+}
+
+async function searchCommunes(q, limit){
+  try{
+    const res = await fetch("https://geo.api.gouv.fr/communes?nom=" + encodeURIComponent(q)
+                            + "&fields=nom,centre,codeDepartement&boost=population&limit=" + limit);
+    const list = (await res.json()).filter(c => c.centre);
+    if (list.length) return list.map(c => ({ nom:c.nom, dep:c.codeDepartement,
+                                             lon:c.centre.coordinates[0], lat:c.centre.coordinates[1] }));
+  }catch(e){}
+  try{
+    const res = await fetch("https://data.geopf.fr/geocodage/search?index=address&type=municipality&limit=" + limit
+                            + "&q=" + encodeURIComponent(q));
+    return ((await res.json()).features || []).map(f => ({ nom:f.properties.city || f.properties.name,
+      dep:(f.properties.postcode || "").slice(0, 2), lon:f.geometry.coordinates[0], lat:f.geometry.coordinates[1] }));
+  }catch(e){}
+  return [];
+}
+
+// indulgent avec l'orthographe : accents, tirets, « St », articles, petites fautes
+function norm(s){
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+    .replace(/[’'`\-]/g, " ").replace(/\bst\b/g, "saint").replace(/\bste\b/g, "sainte")
+    .replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim()
+    .replace(/^(le|la|les|l) /, "");
+}
+function lev(a, b){
+  const d = Array.from({ length:b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++){
+    let prev = d[0]; d[0] = i;
+    for (let j = 1; j <= b.length; j++){
+      const t = d[j];
+      d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = t;
+    }
+  }
+  return d[b.length];
+}
+function sameName(typed, real){
+  const a = norm(typed), b = norm(real);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const tol = b.length >= 14 ? 3 : b.length >= 9 ? 2 : b.length >= 5 ? 1 : 0;
+  return lev(a, b) <= tol;
+}
+
+/* =======================================================================
+   Réponse : par le texte ou par la carte
+   ======================================================================= */
+const $ = id => document.getElementById(id);
+const ans = $("ans"), sugg = $("sugg"), goBtn = $("go"), sendBtn = $("send");
+const mcv = $("mini"), mctx = mcv.getContext("2d");
+const mini = { guess:null, tiles:new Map(), z:7 };
+const MB = (() => { const a = merc(-5.6, 51.3), b = merc(10.0, 41.2); return { x0:a[0], y0:a[1], x1:b[0], y1:b[1] }; })();
+
+function record(ph, lat, lon, how, label, exact){
+  if (G.guesses[ph.r]) return;
+  const d = exact ? 0 : km({ lat, lon }, G.rounds[ph.r]);
+  G.guesses[ph.r] = { lat, lon, t:ph.w, km:d, pts:scoreOf(d, ph.f), how, label:label || "", exact:!!exact };
+  mini.guess = { lat, lon };
+  save();
+  syncGuessUI();
+}
+
+async function submitText(pick){
+  const ph = phase();                       // l'instant compte dès qu'on appuie
+  if (ph.k !== "play" || G.guesses[ph.r]) return;
+  const typed = pick ? pick.nom : ans.value.trim();
+  if (!typed) return;
+  $("msg").textContent = "";
+  ans.disabled = true;
+  try{
+    const truth = await communeAt(ph.r);
+    if (truth && sameName(typed, truth.nom)){
+      const p = G.rounds[ph.r];
+      record(ph, p.lat, p.lon, "text", truth.nom, true);
+      return;
+    }
+    const c = pick || (await searchCommunes(typed, 1))[0];
+    if (!c){ $("msg").textContent = "Commune introuvable. Vérifiez l'orthographe, ou cliquez sur la carte."; return; }
+    record(ph, c.lat, c.lon, "text", c.nom + (c.dep ? " (" + c.dep + ")" : ""), false);
+  } finally {
+    ans.disabled = !!(G.guesses[ph.r]) || phase().k !== "play";
+    sugg.classList.remove("on");
+  }
+}
+
+let suggTimer = null, suggList = [];
+ans.addEventListener("input", () => {
+  clearTimeout(suggTimer);
+  $("msg").textContent = "";
+  const q = ans.value.trim();
+  syncGuessUI();
+  if (q.length < 2){ sugg.classList.remove("on"); return; }
+  suggTimer = setTimeout(async () => {
+    const list = await searchCommunes(q, 5);
+    if (ans.value.trim() !== q) return;
+    suggList = list;
+    sugg.innerHTML = "";
+    for (const c of list){
+      const li = document.createElement("li");
+      li.append(c.nom);
+      const i = document.createElement("i"); i.textContent = c.dep || ""; li.append(i);
+      li.addEventListener("mousedown", e => { e.preventDefault(); ans.value = c.nom; submitText(c); });
+      sugg.append(li);
+    }
+    sugg.classList.toggle("on", list.length > 0);
+  }, 200);
+});
+ans.addEventListener("keydown", e => {
+  if (e.key === "Enter"){ e.preventDefault(); e.stopPropagation(); submitText(null); }
+  if (e.key === "Escape") sugg.classList.remove("on");
+});
+ans.addEventListener("blur", () => setTimeout(() => sugg.classList.remove("on"), 120));
+
+
+/* ---------- petite carte ---------- */
+(function loadMini(){
+  const n = 1 << mini.z;
+  for (let x = Math.floor(MB.x0 * n) - 1; x <= Math.floor(MB.x1 * n) + 1; x++)
+    for (let y = Math.floor(MB.y0 * n) - 1; y <= Math.floor(MB.y1 * n) + 1; y++)
+      fetch(tileURL("plan", mini.z, x, y)).then(r => r.ok ? r.blob() : null)
+        .then(b => b && createImageBitmap(b)).then(bmp => { if (bmp){ mini.tiles.set(x + "/" + y, bmp); drawMini(); } })
+        .catch(() => {});
+})();
+
+function miniView(){
+  const cw = mcv.width, ch = mcv.height, bw = MB.x1 - MB.x0, bh = MB.y1 - MB.y0;
+  return { s:Math.min(cw / bw, ch / bh), cx:(MB.x0 + MB.x1) / 2, cy:(MB.y0 + MB.y1) / 2, cw, ch };
+}
+const toMini = (v, x, y) => [(x - v.cx) * v.s + v.cw / 2, (y - v.cy) * v.s + v.ch / 2];
+
+function pin(c, x, y, fill, ring, scale){
+  const s = scale || 1;
+  c.beginPath(); c.arc(x, y, 9 * s, 0, Math.PI * 2); c.fillStyle = "rgba(0,0,0,.45)"; c.fill();
+  c.beginPath(); c.arc(x, y, 6.5 * s, 0, Math.PI * 2); c.fillStyle = fill; c.fill();
+  if (ring){ c.lineWidth = 2.5 * s; c.strokeStyle = ring; c.stroke(); }
+}
+
+function drawMini(){
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = Math.round(mcv.clientWidth * dpr), h = Math.round(mcv.clientHeight * dpr);
+  if (!w || !h) return;
+  if (mcv.width !== w || mcv.height !== h){ mcv.width = w; mcv.height = h; }
+  const v = miniView(), n = 1 << mini.z, ts = v.s / n;
+  mctx.imageSmoothingQuality = "high";
+  mctx.fillStyle = "#a9c7da"; mctx.fillRect(0, 0, w, h);
+  for (const [k, bmp] of mini.tiles){
+    const [x, y] = k.split("/").map(Number), [px, py] = toMini(v, x / n, y / n);
+    mctx.drawImage(bmp, px, py, ts + 0.5, ts + 0.5);
+  }
+  const ph = phase(), truth = ph.k === "reveal" ? G.rounds[ph.r] : null, g = mini.guess;
+  if (truth && g){
+    const a = toMini(v, ...merc(g.lon, g.lat)), b = toMini(v, truth.mx, truth.my);
+    mctx.setLineDash([7 * dpr, 6 * dpr]); mctx.lineWidth = 2.5 * dpr; mctx.strokeStyle = "#1b1b1b";
+    mctx.beginPath(); mctx.moveTo(...a); mctx.lineTo(...b); mctx.stroke(); mctx.setLineDash([]);
+  }
+  if (g){ const p = toMini(v, ...merc(g.lon, g.lat)); pin(mctx, p[0], p[1], "#e2a83c", null, dpr); }
+  if (truth){ const p = toMini(v, truth.mx, truth.my); pin(mctx, p[0], p[1], "#ffffff", "#6a6af4", dpr); }
+}
+if (window.ResizeObserver) new ResizeObserver(() => drawMini()).observe(mcv);
+
+mcv.addEventListener("click", e => {
+  const ph = phase();
+  if (ph.k !== "play" || G.guesses[ph.r]) return;
+  const rc = mcv.getBoundingClientRect(), v = miniView();
+  const x = (e.clientX - rc.left) * (mcv.width / rc.width), y = (e.clientY - rc.top) * (mcv.height / rc.height);
+  const [lon, lat] = unmerc((x - v.cw / 2) / v.s + v.cx, (y - v.ch / 2) / v.s + v.cy);
+  ans.value = "";
+  sugg.classList.remove("on");
+  record(ph, lat, lon, "map", "", false);      // le clic vaut réponse
+});
+
+function syncGuessUI(){
+  const ph = phase(), box = $("guess");
+  const done = G && ph.r !== undefined && G.guesses[ph.r];
+  const open = ph.k === "play" && !done;
+  box.classList.toggle("locked", !open);
+  box.classList.toggle("big", ph.k === "reveal");
+  $("ask").classList.toggle("done", !!done);
+  ans.disabled = !open;
+  sendBtn.disabled = !open || !ans.value.trim();
+  if (done){
+    ans.value = "";
+    ans.placeholder = done.exact ? "Bien vu ! On attend la fin de la manche…"
+                                 : "Réponse enregistrée" + (done.label ? " : " + done.label : "") + " — on attend la fin…";
+  } else ans.placeholder = "Où sommes-nous ? Tapez une commune…";
+  if (ph.k === "play"){
+    goBtn.disabled = true;
+    goBtn.textContent = done ? "Réponse enregistrée" : "Cliquez sur la carte pour répondre";
+  } else { goBtn.disabled = true; goBtn.textContent = "Réponse"; }
+  requestAnimationFrame(drawMini);
+}
+
+sendBtn.addEventListener("click", () => submitText(null));
+
+// on peut commencer à taper n'importe quand : la frappe part dans la barre
+addEventListener("keydown", e => {
+  if (document.activeElement === ans || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+  const ph = phase();
+  if (ph.k !== "play" || G.guesses[ph.r]) return;
+  const tag = (document.activeElement && document.activeElement.tagName) || "";
+  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+  ans.focus();
+});
+
+/* =======================================================================
+   Repères sur la grande vue, pendant la réponse
+   ======================================================================= */
+function toScreen(cam, mx, my){
+  return [(mx - cam.cx) / cam.span * W + W / 2, (my - cam.cy) / (cam.span * H / W) * H + H / 2];
+}
+function drawOverlay(cam, ph){
+  octx.clearRect(0, 0, W, H);
+  if (ph.k !== "reveal") return;
+  const p = G.rounds[ph.r], g = G.guesses[ph.r], s = DPR * 1.3;
+  const a = smooth(0.2, 0.9, ph.t);
+  octx.globalAlpha = a;
+  const T = toScreen(cam, p.mx, p.my);
+  if (g && !g.exact){
+    const m = merc(g.lon, g.lat), Gp = toScreen(cam, m[0], m[1]);
+    octx.setLineDash([8 * s, 7 * s]); octx.lineWidth = 3 * s; octx.strokeStyle = "rgba(255,255,255,.9)";
+    octx.beginPath(); octx.moveTo(...Gp); octx.lineTo(...T); octx.stroke(); octx.setLineDash([]);
+    pin(octx, Gp[0], Gp[1], "#e2a83c", null, s);
+  }
+  const pulse = (Date.now() / 1000 * 0.8) % 1;
+  octx.beginPath(); octx.arc(T[0], T[1], (12 + pulse * 40) * s, 0, Math.PI * 2);
+  octx.lineWidth = 2.5 * s; octx.strokeStyle = "rgba(255,255,255," + (0.8 * (1 - pulse)) + ")"; octx.stroke();
+  pin(octx, T[0], T[1], "#ffffff", "#6a6af4", s);
+  octx.globalAlpha = 1;
+}
+
+/* =======================================================================
+   Interface
+   ======================================================================= */
+const show = (id, on) => $(id).classList.toggle("on", on);
+const mmss = s => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+const total = () => G.guesses.reduce((a, g) => a + (g ? g.pts : 0), 0);
+const fmtKm = d => d < 10 ? d.toFixed(1).replace(".", ",") + " km" : Math.round(d) + " km";
+const square = g => !g ? "⬛" : g.exact ? "🎯" : g.km < 5 ? "🟩" : g.km < 25 ? "🟨" : g.km < 100 ? "🟧" : "🟥";
+
+let last = "";
+function onPhase(ph){
+  const sig = ph.k + (ph.r ?? "");
+  if (sig === last) return;
+  last = sig;
+  for (const id of ["home", "lobby", "reveal", "end", "late"]) show(id, false);
+  show("hud", ph.k === "play" || ph.k === "reveal");
+  show("guess", ph.k === "play" || ph.k === "reveal");
+  show("scale", ph.k === "play");
+  show("ask", ph.k === "play");
+
+  if (ph.k === "home") show("home", true);
+  if (ph.k === "lobby"){ $("lId").textContent = G.id; $("lLink").value = linkFor(G); show("lobby", true); communeAt(0); }
+  if (ph.k === "play"){
+    const g = G.guesses[ph.r];
+    mini.guess = g ? { lat:g.lat, lon:g.lon } : null;
+    ans.value = ""; $("msg").textContent = "";
+    $("hRound").textContent = ph.r + 1; $("hTotal").textContent = ROUNDS;
+    if (!g) setTimeout(() => { if (!ans.disabled) ans.focus({ preventScroll:true }); }, 60);
+    communeAt(ph.r);
+  }
+  if (ph.k === "reveal"){
+    const g = G.guesses[ph.r];
+    mini.guess = g ? { lat:g.lat, lon:g.lon } : null;
+    $("rWhere").textContent = "…";
+    communeAt(ph.r).then(c => { if (phase().r === ph.r) $("rWhere").textContent = c ? c.nom + (c.dep ? " — " + c.dep : "") : "Lieu mystère"; });
+    $("rPts").innerHTML = (g ? g.pts : 0) + "<small>pts</small>";
+    const line = $("rLine");
+    line.textContent = "";
+    if (!g) line.textContent = "Pas de réponse cette fois-ci.";
+    else if (g.exact){ const b = document.createElement("span"); b.className = "hit"; b.textContent = "Bien vu ! "; line.append(b, "Trouvé en " + Math.round(g.t) + " s."); }
+    else line.textContent = (g.label ? g.label + " : " : "Votre point est à ") + fmtKm(g.km) + ", réponse en " + Math.round(g.t) + " s.";
+    if (ph.r + 1 < ROUNDS) communeAt(ph.r + 1);
+    show("reveal", true);
+  }
+  if (ph.k === "end"){
+    const played = G.guesses.some(Boolean);
+    if (!played && Date.now() / 1000 - G.start > ROUNDS * ROUND_T + 5) show("late", true);
+    else {
+      $("eTotal").innerHTML = total() + "<small>pts</small>";
+      const box = $("eRes"); box.innerHTML = "";
+      G.rounds.forEach((p, i) => {
+        const g = G.guesses[i];
+        const cells = [square(g), g ? (g.exact ? "trouvé" : fmtKm(g.km)) + " · " + Math.round(g.t) + " s" : "pas de réponse", g ? g.pts : 0];
+        for (const c of cells){ const s = document.createElement("span"); s.textContent = c; box.append(s); }
+      });
+      show("end", true);
+    }
+  }
+  syncGuessUI();
+}
+
+function shareText(){
+  const lines = G.rounds.map((p, i) => {
+    const g = G.guesses[i];
+    return (i + 1) + ". " + (!g ? "—" : g.exact ? "trouvé en " + Math.round(g.t) + " s" : fmtKm(g.km) + " en " + Math.round(g.t) + " s");
+  });
+  return "Zoom Out · partie " + G.id + "\n" + G.rounds.map((p, i) => square(G.guesses[i])).join("")
+       + "  " + total().toLocaleString("fr-FR") + " pts\n" + lines.join("\n") + "\n" + linkFor(G);
+}
+async function copy(text, btn){
+  try{ await navigator.clipboard.writeText(text); }
+  catch(e){ const t = document.createElement("textarea"); t.value = text; document.body.append(t); t.select(); document.execCommand("copy"); t.remove(); }
+  const old = btn.textContent; btn.textContent = "Copié"; setTimeout(() => btn.textContent = old, 1400);
+}
+
+$("solo").onclick = () => { startGame(newSeed(), nowS() + 4); last = ""; };
+$("multi").onclick = () => { startGame(newSeed(), nowS() + parseInt($("delay").value, 10)); last = ""; };
+$("lCopy").onclick = () => copy($("lLink").value, $("lCopy"));
+$("eShare").onclick = () => copy(shareText(), $("eShare"));
+$("eNew").onclick = $("lateNew").onclick = () => { G = null; history.replaceState(null, "", location.pathname); last = ""; };
+$("lateReplay").onclick = () => { startGame(G.seed, nowS() + 4); last = ""; };
+addEventListener("hashchange", () => { readHash(); last = ""; });
+
+/* =======================================================================
+   Boucle principale
+   ======================================================================= */
+function scaleText(span, lat){
+  const m = span * EARTH * Math.cos(lat * D2R);
+  return "Champ de vision : " + (m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(m < 10000 ? 1 : 0).replace(".", ",") + " km");
+}
+
+function tick(){
+  const ph = phase();
+  onPhase(ph);
+  let cam, planA = 0;
+  if (ph.k === "play"){
+    cam = camFor(ph.r, ph.w);
+    $("hBar").style.width = (ph.f * 100).toFixed(2) + "%";
+    const left = Math.max(0, ZOOM_T - ph.w);
+    $("hClock").textContent = Math.ceil(left) + " s";
+    $("hClock").classList.toggle("low", left <= 10);
+    $("hGain").textContent = G.guesses[ph.r] ? "réponse donnée" : "jusqu'à " + scoreOf(0, ph.f) + " pts";
+    $("scale").textContent = scaleText(cam.span, unmerc(cam.cx, cam.cy)[1]);
+  } else if (ph.k === "reveal"){
+    cam = revealCam(ph.r, ph.t);
+    planA = planAlphaAt(ph.t);
+    $("hBar").style.width = "100%";
+    $("hGain").textContent = "";
+    $("hClock").textContent = "";
+    $("rNext").textContent = (ph.r + 1 < ROUNDS ? "Manche suivante dans " : "Résultats dans ") + Math.ceil(ph.left) + " s";
+  } else {
+    cam = overview();
+    if (ph.k === "lobby") $("lCount").textContent = mmss(Math.ceil(ph.left));
+  }
+  if (G) $("hScore").textContent = total().toLocaleString("fr-FR");
+  render(cam, planA);
+  drawOverlay(cam, ph);
+  requestAnimationFrame(tick);
+}
+
+resize();
+readHash();
+plan();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
